@@ -251,7 +251,13 @@ class Projector:
 class Regressor:
     """Perform DC-Cox PH Regression."""
 
-    def __init__(self, *, alpha: float = 0.05, step_size: float = 0.5) -> None:
+    def __init__(
+        self,
+        *,
+        alpha: float = 0.05,
+        step_size: float = 0.5,
+        var_thres: float = 1e-8,
+    ) -> None:
         """
         Perform DC-Cox PH Regression.
 
@@ -262,6 +268,8 @@ class Regressor:
             It is `alpha` parameter in `lifelines.fitters.coxph_fitter.CoxPHFitter`.
         step_size : float
             Deal with the fitting error, `delta contains nan value(s)`.
+        var_thres : float
+            The threshold for dropping low variance columns.
 
         See Also
         --------
@@ -269,6 +277,7 @@ class Regressor:
         https://lifelines.readthedocs.io/en/latest/Examples.html#problems-with-convergence-in-the-cox-proportional-hazard-model
         DC-COX[https://doi.org/10.1016/j.jbi.2022.104264]
         """
+        self.var_thres = var_thres
         self.fitter_params = {"alpha": alpha}
         self.fitting_params = {
             "duration_col": "duration",
@@ -355,12 +364,11 @@ class Regressor:
 
         return BlockMatrix(Gs, axis=0)
 
-    @staticmethod
     def _drop_low_var_cols(
-        X_hat: np.ndarray, Gs: BlockMatrix
+        self, X_hat: np.ndarray, Gs: BlockMatrix
     ) -> tuple[np.ndarray, BlockMatrix]:
         vars_ = np.var(X_hat, axis=0)
-        keeps_ = vars_ > 0.01
+        keeps_ = vars_ > self.var_thres
         X_hat = X_hat[:, keeps_]
         for c in range(Gs.shape[0]):
             for d in range(Gs.shape[1]):
