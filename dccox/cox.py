@@ -167,10 +167,10 @@ class Projector:
         Fdr : np.array
             The PCs with shape (n_features, min(k, len(non-zero singular values))).
         """
-        X_shift = X.T - np.mean(X, axis=1)  # Make the row mean to 0
-        _, S, Vh = np.linalg.svd(X_shift)
+        X_shift = (X - X.mean(axis=0, keepdims=True)).T
+        U, S, _ = np.linalg.svd(X_shift, full_matrices=False)
         k = min(self.k, len(S))
-        return X_shift @ Vh.T[:, :k]
+        return U[:, :k] * S[:k]
 
     @staticmethod
     def _create_random_nonsingular(m_tilde: int) -> np.ndarray:
