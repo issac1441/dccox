@@ -71,7 +71,12 @@ def _run_distributed(
             Xanc_d = Xancs[d]
 
             projector = Projector(
-                k=20, bs_prop=0.6, bs_times=20, alpha=0.05, step_size=0.5
+                k=20,
+                bs_prop=0.6,
+                bs_times=20,
+                bs_replace=False,
+                alpha=0.05,
+                step_size=0.5,
             )
             projector.project(X=Xcd, Xanc=Xanc_d, events=evt_c, durations=dur_c)
 
@@ -89,7 +94,7 @@ def _run_distributed(
     all_durations = durations
     all_events = events
 
-    model = Regressor(alpha=0.05, step_size=0.5).fit(
+    model = Regressor(alpha=0.05, step_size=0.5, var_thres=1e-8).fit(
         Xs_tilde=Xs_tilde,
         Xancs_tilde=Xancs_tilde,
         durations=all_durations,
