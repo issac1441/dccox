@@ -257,6 +257,7 @@ class Regressor:
         alpha: float = 0.05,
         step_size: float = 0.5,
         var_thres: float = 1e-8,
+        m_hat: int | None = None,
     ) -> None:
         """
         Perform DC-Cox PH Regression.
@@ -270,6 +271,9 @@ class Regressor:
             Deal with the fitting error, `delta contains nan value(s)`.
         var_thres : float
             The threshold for dropping low variance columns.
+        m_hat : int | None
+            The hyperparameter controlling the dimension of the transformed feature space.
+            If None, the dimension is determined by the number of non-zero singular values.
 
         See Also
         --------
@@ -278,6 +282,7 @@ class Regressor:
         DC-COX[https://doi.org/10.1016/j.jbi.2022.104264]
         """
         self.var_thres = var_thres
+        self.m_hat = m_hat
         self.fitter_params = {"alpha": alpha}
         self.fitting_params = {
             "duration_col": "duration",
@@ -325,8 +330,7 @@ class Regressor:
         """
         return self.__Gs
 
-    @staticmethod
-    def _compute_target_matrix(Xancs_tilde: BlockMatrix) -> BlockMatrix:
+    def _compute_target_matrix(self, Xancs_tilde: BlockMatrix) -> BlockMatrix:
         """
         Compute the target matrix Gs.
 
@@ -352,7 +356,9 @@ class Regressor:
 
         # U: (r x m hat), m hat equals to len(S)
         U, S, _ = np.linalg.svd(Xancs_)
-        P = U[:, : len(S)] * S
+
+        m_hat = self.m_hat if self.m_hat else len(S)
+        P = U[:, :m_hat] * S[:m_hat]
 
         Gs = []
         for c in range(Xancs_tilde.shape[0]):
