@@ -44,6 +44,7 @@ class Projector:
         k: int = 10,
         bs_prop: float = 0.6,
         bs_times: int = 20,
+        bs_replace: bool = False,
         alpha: float = 0.05,
         step_size: float = 0.5,
     ) -> None:
@@ -59,11 +60,21 @@ class Projector:
             The proportion of the samples in a client used for bootstrapping for each time.
         bs_times : int
             The number of times to bootstrap.
+        bs_replace : bool
+            Whether to sample with replacement when generating bootstrap subsets for Fbs.
+            - True: classic bootstrap (with replacement).
+            - False: subsampling (without replacement).
         alpha : float
             The level in the confidence intervals.
             It is `alpha` parameter in `lifelines.fitters.coxph_fitter.CoxPHFitter`.
         step_size : float
             Deal with the fitting error, `delta contains nan value(s)`.
+
+        Notes
+        -----
+        Setting `bs_replace=False` is generally more stable for Cox fitting. Sampling with replacement can
+        produce many duplicate rows and an effectively smaller sample size, which increases the chance of
+        high collinearity / separation and may trigger a singular-matrix convergence error in lifelines.
 
         See Also
         --------
@@ -74,6 +85,7 @@ class Projector:
         self.k = k
         self.bs_prop = bs_prop
         self.bs_times = bs_times
+        self.bs_replace = bs_replace
         self.fitter_params = {"alpha": alpha}
         self.fitting_params = {
             "duration_col": "duration",
@@ -144,7 +156,7 @@ class Projector:
         data = pd.concat([X, y], axis=1)
         for _ in range(self.bs_times):
             idx = np.random.choice(
-                n_samples, int(self.bs_prop * n_samples), replace=False
+                n_samples, int(self.bs_prop * n_samples), replace=self.bs_replace
             )
             model = CoxPHFitter(**self.fitter_params)
             model.fit(data.iloc[idx, :], **self.fitting_params)
