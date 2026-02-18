@@ -15,6 +15,7 @@ except ImportError:
     from scipy.integrate import trapezoid as trapz
 
 from dccox.block import BlockMatrix
+from dccox.types import Array1D, Array2D
 from dccox.utils import validate_methods
 
 
@@ -94,7 +95,7 @@ class Projector:
         }
 
     @property
-    def F(self) -> np.ndarray:
+    def F(self) -> Array2D:
         """
         Get the transformation matrix F.
 
@@ -106,7 +107,7 @@ class Projector:
         return self.__F
 
     @property
-    def X_tilde(self) -> np.ndarray:
+    def X_tilde(self) -> Array2D:
         """
         Get the transformed feature matrix X tilde.
 
@@ -118,7 +119,7 @@ class Projector:
         return self.__X_tilde
 
     @property
-    def Xanc_tilde(self) -> np.ndarray:
+    def Xanc_tilde(self) -> Array2D:
         """
         Get the transformed global anchor matrix Xanc tilde.
 
@@ -129,9 +130,7 @@ class Projector:
         """
         return self.__Xanc_tilde
 
-    def _compute_Fbs(
-        self, X: np.ndarray, events: np.ndarray, durations: np.ndarray
-    ) -> np.ndarray:
+    def _compute_Fbs(self, X: Array2D, events: Array1D, durations: Array1D) -> Array2D:
         """
         Apply the Cox PH model to X, events and durations to obtain coefficients.
 
@@ -165,7 +164,7 @@ class Projector:
         Fbs = np.concatenate(coefs).T
         return Fbs
 
-    def _compute_Fdr(self, X: np.ndarray) -> np.ndarray:
+    def _compute_Fdr(self, X: Array2D) -> Array2D:
         """
         Compute the PCs (samples as features).
 
@@ -185,7 +184,7 @@ class Projector:
         return U[:, :k] * S[:k]
 
     @staticmethod
-    def _create_random_nonsingular(m_tilde: int) -> np.ndarray:
+    def _create_random_nonsingular(m_tilde: int) -> Array2D:
         """
         Create a well-conditioned nonsingular random matrix E.
 
@@ -202,9 +201,7 @@ class Projector:
         Q = Q * signs
         return Q
 
-    def _compute_F(
-        self, X: np.ndarray, events: np.ndarray, durations: np.ndarray
-    ) -> None:
+    def _compute_F(self, X: Array2D, events: Array1D, durations: Array1D) -> None:
         # n_features x mbs(bs_times)
         Fbs = self._compute_Fbs(X, events, durations)
         # n_features x mdr(min(k, len(non-zero singular values)))
@@ -217,7 +214,7 @@ class Projector:
         self.__F = F_ @ E
 
     def project(
-        self, X: np.ndarray, Xanc: np.ndarray, events: np.ndarray, durations: np.ndarray
+        self, X: Array2D, Xanc: Array2D, events: Array1D, durations: Array1D
     ) -> None:
         """
         Perform the linear transformation.
@@ -291,7 +288,7 @@ class Regressor:
         }
 
     @property
-    def coef(self) -> np.ndarray:
+    def coef(self) -> Array1D:
         r"""
         Coefficients.
 
@@ -301,7 +298,7 @@ class Regressor:
         return self.__coef
 
     @property
-    def coef_var(self) -> np.ndarray:
+    def coef_var(self) -> Array2D:
         r"""
         Variance-covariance matrix.
 
@@ -321,7 +318,7 @@ class Regressor:
         return self.__baseline_hazard
 
     @property
-    def Gs(self) -> list[np.ndarray]:
+    def Gs(self) -> list[Array2D]:
         r"""
         Target matrices.
 
@@ -371,8 +368,8 @@ class Regressor:
         return BlockMatrix(Gs, axis=0)
 
     def _drop_low_var_cols(
-        self, X_hat: np.ndarray, Gs: BlockMatrix
-    ) -> tuple[np.ndarray, BlockMatrix]:
+        self, X_hat: Array2D, Gs: BlockMatrix
+    ) -> tuple[Array2D, BlockMatrix]:
         vars_ = np.var(X_hat, axis=0)
         keeps_ = vars_ > self.var_thres
         X_hat = X_hat[:, keeps_]
@@ -385,8 +382,8 @@ class Regressor:
         self,
         Xs_tilde: BlockMatrix,
         Gs: BlockMatrix,
-        durations: np.ndarray,
-        events: np.ndarray,
+        durations: Array1D,
+        events: Array1D,
     ) -> None:
         """
         Perform Cox-PH regression on X hat.
@@ -424,8 +421,8 @@ class Regressor:
         self,
         Xs_tilde: BlockMatrix,
         Xancs_tilde: BlockMatrix,
-        durations: np.ndarray,
-        events: np.ndarray,
+        durations: Array1D,
+        events: Array1D,
     ) -> None:
         r"""
         Calculate the target matrix G and perform the Cox-PH regression.
@@ -473,9 +470,9 @@ class SurvivalFunction:
     def __init__(
         self,
         coef: pd.DataFrame,
-        coef_var: np.ndarray,
+        coef_var: Array2D,
         baseline_hazard: pd.DataFrame,
-        mean: np.ndarray,
+        mean: Array1D,
         *,
         alpha: float = 0.05,
     ) -> None:
@@ -540,7 +537,7 @@ class SurvivalFunction:
         return self.__coef
 
     @property
-    def coef_var(self) -> np.ndarray:
+    def coef_var(self) -> Array2D:
         r"""
         Variance-covariance matrix.
 
