@@ -6,6 +6,8 @@ from typing import TypeVar
 
 import numpy as np
 
+from dccox.types import Array2D
+
 T = TypeVar("T")
 
 
@@ -25,7 +27,7 @@ class BlockMatrix:
         This will affect the indexing output.
     """
 
-    def __init__(self, Ms: list[list[np.ndarray]], axis: int = 1) -> None:
+    def __init__(self, Ms: list[list[Array2D]], axis: int = 1) -> None:
         """
         Initialize a block matrix.
 
