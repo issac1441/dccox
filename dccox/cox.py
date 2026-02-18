@@ -186,10 +186,21 @@ class Projector:
 
     @staticmethod
     def _create_random_nonsingular(m_tilde: int) -> np.ndarray:
-        E = np.random.rand(m_tilde, m_tilde)
-        Ex = np.sum(np.abs(E), axis=1)
-        np.fill_diagonal(E, Ex)
-        return E
+        """
+        Create a well-conditioned nonsingular random matrix E.
+
+        The paper uses a random nonsingular matrix E to mix/rotate the columns of
+        [Fbs, Fdr] without changing its column space. For numerical stability we
+        prefer an orthogonal matrix (always invertible, condition number = 1).
+        """
+        # Random orthogonal matrix via QR factorization
+        A = np.random.randn(m_tilde, m_tilde)
+        Q, R = np.linalg.qr(A)
+        # Fix sign ambiguity so it's a proper random draw over O(n)
+        signs = np.sign(np.diag(R))
+        signs[signs == 0] = 1.0
+        Q = Q * signs
+        return Q
 
     def _compute_F(
         self, X: np.ndarray, events: np.ndarray, durations: np.ndarray
