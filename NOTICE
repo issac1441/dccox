@@ -1,0 +1,9 @@
+dccox
+The PoC of DC-COX, a federated Cox PH regression approach.
+Copyright (c) 2026 Jian-Hung Wen
+
+This project is licensed under ARL-1.1.
+See LICENSE for full terms.
+
+Third-party components:
+- None (or list any third-party libraries with their licenses)

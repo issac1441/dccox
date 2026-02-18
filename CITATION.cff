@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: "dccox"
+authors:
+  - family-names: "Wen"
+    given-names: "Jian-Hung"
+    # orcid: "https://orcid.org/0000-0000-0000-0000"  # Optional: Add your ORCID
+date-released: "2026-02-18"  # Format: YYYY-MM-DD
+license: "ARL-1.1"  # e.g., MIT, Apache-2.0, GPL-3.0
+repository-code: "https://github.com/issac1441/dccox"
+type: software
+version: "0.1.0"
+message: "If you use this software, please cite it as below."
+# Optional fields:
+# doi: "10.5281/zenodo.xxxxxxx"
+# url: "https://example.com"
+# abstract: "A brief description of the software."
+# keywords:
+#   - python
+#   - template
