@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-An unofficial implementation of DC-COX, a federated Cox PH regression approach.
+An unofficial implementation of [DC-COX](https://www.sciencedirect.com/science/article/pii/S1532046422002696), a federated Cox PH regression approach.
 
 ## Differences from the DC-COX paper
 
