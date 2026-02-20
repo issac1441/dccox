@@ -179,6 +179,11 @@ class Horizontal:
             The projected global anchor matrix with shape (r, m tilde).
         feature_sum : Array1D
             The sums of the features.
+
+        Notes
+        -----
+        In Algorithm 1, each worker also shares (t_i, delta_i) to the master along with (X_tilde, Xanc_tilde).
+        In this codebase, y (concatenated t and delta) is returned separately as ys in the orchestration layer.
         """
         if len(X) == 0:
             return None, [None], [None], np.zeros(X.shape[1])
@@ -272,6 +277,8 @@ class Horizontal:
             The baseline hazard values, where the index is the time.
         feature_mean : Array1D
             The global means of the features.
+            Note: This is an implementation convenience for prediction/reporting (e.g., to align with lifelines baseline hazard convention),
+            and is not a core artifact of the DC-Cox paper.
         """
         if not isinstance(Xs_tilde[0], list):
             raise TypeError("Xs_tilde must be a list of lists.")
@@ -286,7 +293,10 @@ class Horizontal:
         Xs_tilde = BlockMatrix([Xs_tilde[idx] for idx in keep_idx])
         Xancs_tilde = BlockMatrix([Xancs_tilde[idx] for idx in keep_idx])
         ys = np.concatenate([ys[idx] for idx in keep_idx])
-        feature_mean = np.sum(sums, axis=0) / ys.shape[0]
+
+        # Keep numerator/denominator consistent with filtered clients.
+        kept_sums = [sums[idx] for idx in keep_idx]
+        feature_mean = np.sum(kept_sums, axis=0) / ys.shape[0]
 
         model = Regressor(
             alpha=alpha,
@@ -334,6 +344,8 @@ class Horizontal:
             The baseline hazard values, where the index is the time.
         mean : Array1D
             The global means of the features.
+            Note: This is an implementation convenience for prediction/reporting (e.g., to align with lifelines baseline hazard convention),
+            and is not a core artifact of the DC-Cox paper.
         F : Array2D
             The linear projection matrix to be used for creating the projected matrices,
             X_tilde and Xanc_tilde, its shape is (n_features, m tilde).
