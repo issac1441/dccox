@@ -59,6 +59,7 @@ def validate_methods(cls: type) -> type:
                     config=ConfigDict(
                         arbitrary_types_allowed=True,
                         validate_return=validate_return,
+                        strict=True,
                     ),
                 ),
             )
