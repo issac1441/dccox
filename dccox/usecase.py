@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -126,6 +127,7 @@ class Horizontal:
         X: Array2D,
         Xanc: Array2D,
         y: Array2D,
+        *,
         k: int = 20,
         bs_prop: float = 0.6,
         bs_times: int = 20,
@@ -219,6 +221,7 @@ class Horizontal:
         Xancs_tilde: list[list[Array2D | None]],
         ys: list[Array2D],
         sums: list[Array1D],
+        *,
         alpha: float = 0.05,
         step_size: float = 0.5,
         var_thres: float = 1e-8,
@@ -312,7 +315,9 @@ class Horizontal:
         baseline_hazard: pd.DataFrame,
         mean: Array1D,
         F: Array2D,
+        *,
         alpha: float = 0.05,
+        centering: Literal["mean"] | None = None,
     ) -> SurvivalFunction:
         """
         Recover the survival function and statistical properties from projected coefficients and variance-covariance matrix.
@@ -332,6 +337,13 @@ class Horizontal:
         F : Array2D
             The linear projection matrix to be used for creating the projected matrices,
             X_tilde and Xanc_tilde, its shape is (n_features, m tilde).
+        alpha : float
+            The significance level for confidence intervals.
+        centering : Literal["mean"] | None
+            The centering strategy for baseline hazard computation.
+            - None (default): baseline hazard at x=0 (paper convention)
+            - "mean": baseline hazard at x=mean (lifelines convention)
+            See SurvivalFunction docstring for detailed explanation.
 
         Returns
         -------
@@ -344,6 +356,6 @@ class Horizontal:
         coef = pd.Series(coef, index=keep_feature_cols)
         coef.name = "covariate"
         survival_func = SurvivalFunction(
-            coef, coef_var, baseline_hazard, mean, alpha=alpha
+            coef, coef_var, baseline_hazard, mean, alpha=alpha, centering=centering
         )
         return survival_func

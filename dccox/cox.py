@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from lifelines import CoxPHFitter
 import numpy as np
@@ -468,23 +468,67 @@ class Regressor:
         return self
 
 
+@validate_methods
 class SurvivalFunction:
-    """Cox survival function."""
+    r"""Cox survival function.
+
+    This class provides methods for survival analysis based on the Cox proportional
+    hazards model. It supports two centering strategies for baseline hazard computation.
+
+    Centering Strategies
+    ---------------------
+    The `centering` parameter controls how the baseline hazard and partial hazard
+    are computed:
+
+    **centering=None (default, paper convention)**:
+        - Baseline hazard is defined at x=0:
+          h(t|x) = h_0(t) * exp(x @ beta)
+        - The baseline hazard from lifelines (which is at the mean) is transformed:
+          h_0_paper(t) = h_0_lifelines(t) * exp(-mean @ beta)
+        - Partial hazard: exp(X @ beta)
+        - This follows the standard textbook/paper definition where h_0(t) represents
+          the hazard when all covariates are zero.
+
+    **centering="mean" (lifelines convention)**:
+        - Baseline hazard is defined at x=mean:
+          h(t|x) = h_0(t) * exp((x - mean) @ beta)
+        - The baseline hazard is used as-is from lifelines.
+        - Partial hazard: exp((X - mean) @ beta)
+        - This is the convention used by lifelines library, where h_0(t) represents
+          the hazard at the mean covariate values.
+
+    Both conventions yield identical hazard predictions h(t|x), but differ in how
+    the baseline hazard h_0(t) is defined and reported.
+    """
 
     def __init__(
         self,
-        coef: pd.DataFrame,
+        coef: pd.Series,
         coef_var: Array2D,
         baseline_hazard: pd.DataFrame,
         mean: Array1D,
         *,
         alpha: float = 0.05,
+        centering: Literal["mean"] | None = None,
     ) -> None:
         self.__coef = coef
         self.__coef_var = coef_var
-        self.__baseline_hazard = baseline_hazard
-        self.__mean = mean
+        self.__mean = np.asarray(mean, dtype=float)
         self.alpha = alpha
+        self.centering = centering
+
+        if centering is None:
+            # h0_paper(t) = h0_lifelines(t) * exp(-mean^T beta)
+            # Transform baseline hazard from "at mean" to "at zero"
+            beta_vec = np.asarray(coef.to_numpy(), dtype=float)
+            shift = float(self.__mean @ beta_vec)
+            scale = float(np.exp(-shift))
+            self.__baseline_hazard = baseline_hazard.copy()
+            col0 = self.__baseline_hazard.columns[0]
+            self.__baseline_hazard[col0] = self.__baseline_hazard[col0] * scale
+        else:
+            # centering="mean": use baseline hazard as-is (at mean)
+            self.__baseline_hazard = baseline_hazard
 
     @property
     def baseline_cumhazards(self) -> pd.DataFrame:
@@ -645,14 +689,20 @@ class SurvivalFunction:
         return pd.concat([df1, self.CI, df2], axis=1)
 
     def predict_log_partial_hazard(self, X: pd.DataFrame) -> pd.Series:
-        r"""
-        Log-partial hazard.
+        r"""Log-partial hazard.
 
-        .. math::
-            \\mathbf{X}\beta
+        Computes the log-partial hazard based on the centering strategy:
+
+        - centering=None: X @ beta (paper convention)
+        - centering="mean": (X - mean) @ beta (lifelines convention)
+
+        Both yield identical final hazard predictions when combined with their
+        respective baseline hazards.
         """
-        X = X.loc[:, self.__coef.index] - self.__mean
-        return X @ self.__coef
+        X_ = X.loc[:, self.__coef.index]
+        if self.centering == "mean":
+            X_ = X_ - self.__mean
+        return X_ @ self.__coef
 
     def predict_partial_hazard(self, X: pd.DataFrame) -> pd.Series:
         r"""
@@ -758,7 +808,7 @@ class SurvivalFunction:
         """
         return self._predict_times("predict_survival_at", X)
 
-    def predict_expectation(self, X: pd.DataFrame) -> pd.Series:
+    def predict_expectation(self, X: pd.DataFrame) -> Array1D:
         r"""
         Predict expectation of survival time.
 
