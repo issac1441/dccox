@@ -111,7 +111,7 @@ class BlockMatrix:
         else:
             raise TypeError(f"Unsupported index type: {type(idx).__name__}")
 
-    def __getitem__(self, indices: slice | int | list | tuple) -> np.ndarray:
+    def __getitem__(self, indices: slice | int | list | tuple) -> Array2D:
         """
         Get the block matrix.
 

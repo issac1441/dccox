@@ -9,6 +9,7 @@ import pandas as pd
 
 from dccox.block import BlockMatrix
 from dccox.cox import Projector, Regressor, SurvivalFunction
+from dccox.types import Array1D, Array2D
 from dccox.utils import validate_methods
 
 
@@ -16,7 +17,7 @@ from dccox.utils import validate_methods
 class Horizontal:
     """DC-Cox regression use case."""
 
-    def global_create_Xanc(self, n_features: int, *, r: int = 100) -> np.ndarray:
+    def global_create_Xanc(self, n_features: int, *, r: int = 100) -> Array2D:
         """
         Generate a random anchor matrix Xanc.
 
@@ -40,7 +41,7 @@ class Horizontal:
         *,
         keep_feature_cols: list[str] | None = None,
         meta_cols: list[str] | None = None,
-    ) -> tuple[np.ndarray, np.ndarray, list[str], pd.DataFrame]:
+    ) -> tuple[Array2D, Array2D, list[str], pd.DataFrame]:
         """
         Load clinical metadata.
 
@@ -122,16 +123,19 @@ class Horizontal:
 
     def local_create_proxy_data(
         self,
-        X: np.ndarray,
-        Xanc: np.ndarray,
-        y: np.ndarray,
+        X: Array2D,
+        Xanc: Array2D,
+        y: Array2D,
         k: int = 20,
         bs_prop: float = 0.6,
         bs_times: int = 20,
         bs_replace: bool = False,
         alpha: float = 0.05,
         step_size: float = 0.5,
-    ) -> tuple[np.ndarray, list[np.ndarray], list[np.ndarray], np.ndarray]:
+    ) -> (
+        tuple[Array2D, list[Array2D], list[Array2D], Array1D]
+        | tuple[None, list[None], list[None], Array1D]
+    ):
         """
         Create linear projection matrix F, projected matrix X_tilde and projected anchor matrix Xanc_tilde.
 
@@ -211,17 +215,15 @@ class Horizontal:
 
     def global_fit_model(
         self,
-        Xs_tilde: list[list[np.ndarray | None]],
-        Xancs_tilde: list[list[np.ndarray | None]],
-        ys: list[np.ndarray],
-        sums: list[np.ndarray],
+        Xs_tilde: list[list[Array2D | None]],
+        Xancs_tilde: list[list[Array2D | None]],
+        ys: list[Array2D],
+        sums: list[Array1D],
         alpha: float = 0.05,
         step_size: float = 0.5,
         var_thres: float = 1e-8,
         m_hat: int | None = None,
-    ) -> tuple[
-        list[list[np.ndarray]], list[list[np.ndarray]], pd.DataFrame, np.ndarray
-    ]:
+    ) -> tuple[list[list[Array1D]], list[list[Array2D]], pd.DataFrame, Array1D]:
         """
         Perform the Cox-PH regression on the given Xs_tilde and Xancs_tilde.
 
@@ -305,11 +307,11 @@ class Horizontal:
     def local_recover_survival(
         self,
         keep_feature_cols: list[str],
-        coef: np.ndarray,
-        coef_var: np.ndarray,
+        coef: Array1D,
+        coef_var: Array2D,
         baseline_hazard: pd.DataFrame,
-        mean: np.ndarray,
-        F: np.ndarray,
+        mean: Array1D,
+        F: Array2D,
         alpha: float = 0.05,
     ) -> SurvivalFunction:
         """
