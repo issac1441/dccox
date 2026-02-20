@@ -36,8 +36,8 @@ This repository implements the DC-COX workflow and follows the paper’s core al
 - This implementation optionally drops columns of $\hat X$ with variance below `var_thres` (default `1e-8`) before fitting, to reduce degeneracy/singularity issues in `lifelines`.
 - When columns are dropped, the corresponding columns in $G$ are dropped as well to keep mappings consistent.
 
-   > [!NOTE]
-   > This can cause differences from a strict centralized reference if the centralized run would keep those columns.
+  > [!NOTE]
+  > This can cause differences from a strict centralized reference if the centralized run would keep those columns.
 
 ### 5) Survival prediction supports two centering conventions (`centering`)
 - The paper uses the standard Cox form:
