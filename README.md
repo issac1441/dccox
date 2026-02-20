@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-An unofficial implementation of [DC-COX](https://www.sciencedirect.com/science/article/pii/S1532046422002696), a federated Cox PH regression approach.
+An **UNOFFICIAL** implementation of [DC-COX](https://www.sciencedirect.com/science/article/pii/S1532046422002696), a federated Cox PH regression approach.
 
 ## Differences from the DC-COX paper
 
@@ -198,9 +198,15 @@ dccox/
 └── CHANGELOG.md
 ```
 
-## Reference
+## 📚 References & Citation
 
-[DC-COX: Data collaboration Cox proportional hazards model for privacy-preserving survival analysis on multiple parties](https://www.sciencedirect.com/science/article/pii/S1532046422002696)
+### Original Paper (Method)
+If you use the DC-COX method in your research, please cite the original paper:
+> [DC-COX: Data collaboration Cox proportional hazards model for privacy-preserving survival analysis on multiple parties](https://www.sciencedirect.com/science/article/pii/S1532046422002696)
+
+### This Implementation (Software)
+If you use this specific software implementation, please cite it using the metadata in [`CITATION.cff`](CITATION.cff) or as follows:
+> Wen, J.-H. (2026). dccox: An unofficial implementation of DC-COX [Computer software]. https://github.com/issac1441/dccox
 
 
 ## 🤝 Contributing

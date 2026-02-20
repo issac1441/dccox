@@ -2,6 +2,9 @@
 name = "dccox"
 version = "0.1.0"
 description = "The PoC of DC-COX, a federated Cox PH regression approach."
+authors = [
+    { name = "Jian-Hung Wen", email = "thetimmy0524@gmail.com" }
+]
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "ARL-1.1" }
