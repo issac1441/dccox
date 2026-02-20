@@ -36,7 +36,7 @@ This repository implements the DC-COX workflow and follows the paper’s core al
 - This implementation optionally drops columns of $\hat X$ with variance below `var_thres` (default `1e-8`) before fitting, to reduce degeneracy/singularity issues in `lifelines`.
 - When columns are dropped, the corresponding columns in $G$ are dropped as well to keep mappings consistent.
 
-   > [!Note]
+   > [!NOTE]
    > This can cause differences from a strict centralized reference if the centralized run would keep those columns.
 
 ### 5) Survival prediction supports two centering conventions (`centering`)
@@ -51,16 +51,15 @@ This repository implements the DC-COX workflow and follows the paper’s core al
 
   **(a) `centering=None` (paper convention)**  
   Uses $x^\top\beta$ in the linear predictor, and rescales the provided baseline hazard by a constant factor:
-  $$
-  h_0^{paper}(t) = h_0^{lifelines}(t)\exp(-\bar x^\top\beta).
-  $$
+  
+  $$h_0^{paper}(t) = h_0^{lifelines}(t)\exp(-\bar x^\top\beta)$$
+
   Partial hazard uses $\exp(x^\top\beta)$.
 
   **(b) `centering="mean"` (lifelines convention)**  
   Uses $(x-\bar x)^\top\beta$ in the linear predictor and keeps baseline hazard unchanged:
-  $$
-  h(t\mid x) = h_0^{lifelines}(t)\exp((x-\bar x)^\top\beta).
-  $$
+  
+  $$h(t\mid x) = h_0^{lifelines}(t)\exp((x-\bar x)^\top\beta)$$
 
 - Both conventions yield **identical final hazard/survival predictions**, but the *reported* baseline hazard differs by a constant factor.
 
