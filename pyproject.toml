@@ -2,6 +2,9 @@
 name = "dccox"
 version = "0.1.0"
 description = "The PoC of DC-COX, a federated Cox PH regression approach."
+authors = [
+    { name = "Jian-Hung Wen", email = "thetimmy0524@gmail.com" }
+]
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "ARL-1.1" }
@@ -16,7 +19,12 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
+    "lifelines>=0.30.1",
+    "numpy>=2.4.2",
+    "pandas>=2.3.3",
     "pydantic>=2.10.0",
+    "pydantic-settings>=2.13.0",
+    "scipy>=1.17.0",
 ]
 
 [project.urls]
