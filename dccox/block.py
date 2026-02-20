@@ -20,11 +20,12 @@ class BlockMatrix:
     blocks : list of lists of Array2D
         The list stores the lists of arrays
     axis : int
-        The axis of unequal sizes.
-        For example, the matrix shapes in a Ms[0]:
-        [(3,10), (3,2), (3,4)], the axis=1,
-        [(10,3), (2,3), (4,2)], the axis=0.
-        This will affect the indexing output.
+        The axis along which blocks are concatenated or unequal in size.
+        - axis=1: Blocks in a row (same client) are concatenated along columns (feature blocks).
+          e.g., shapes in Ms[0]: [(3,10), (3,2), (3,4)].
+        - axis=0: Blocks in a column (same dimension) are concatenated along rows (sample blocks).
+          e.g., shapes in Ms[:,0]: [(10,3), (2,3), (4,2)].
+        This affects the indexing and reconstruction behavior.
     """
 
     def __init__(self, Ms: list[list[Array2D]], axis: int = 1) -> None:
@@ -36,11 +37,12 @@ class BlockMatrix:
         Ms : list of lists of Array2D
             The list stores the lists of arrays
         axis : int
-            The axis of unequal sizes.
-            For example, the matrix shapes in a Ms[0]:
-            [(3,10), (3,2), (3,4)], the axis=1,
-            [(10,3), (2,3), (4,2)], the axis=0.
-            This will affect the indexing output.
+            The axis along which blocks are concatenated or unequal in size.
+            - axis=1: Blocks in a row (same client) are concatenated along columns (feature blocks).
+              e.g., shapes in Ms[0]: [(3,10), (3,2), (3,4)].
+            - axis=0: Blocks in a column (same dimension) are concatenated along rows (sample blocks).
+              e.g., shapes in Ms[:,0]: [(10,3), (2,3), (4,2)].
+            This affects the indexing and reconstruction behavior.
         """
         self.blocks = Ms
         self.__nc = len(self.blocks)
