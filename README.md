@@ -22,8 +22,12 @@ This repository implements the DC-COX workflow and follows the paper’s core al
 ### 2) PCA-based $F_{DR}$: feature-space basis via SVD
 - The paper allows combining bootstrap-based DR with other DR methods (e.g., PCA/LPP/NMF) to form:
   
+  <div align="center">
+
   $$F = [F_{BS}, F_{DR}]E.$$
   $$F_{DR} \in \mathbb{R}^{m\times \tilde m_{DR}}$$
+
+  </div>
 
 - This implementation constructs $F_{DR} \in \mathbb{R}^{m\times \tilde m_{DR}}$ using a **feature-space PCA basis** computed via SVD (i.e., PCA loadings / directions).
 
@@ -36,14 +40,17 @@ This repository implements the DC-COX workflow and follows the paper’s core al
 - This implementation optionally drops columns of $\hat X$ with variance below `var_thres` (default `1e-8`) before fitting, to reduce degeneracy/singularity issues in `lifelines`.
 - When columns are dropped, the corresponding columns in $G$ are dropped as well to keep mappings consistent.
 
-   > [!Note]
-   > This can cause differences from a strict centralized reference if the centralized run would keep those columns.
+> [!NOTE]
+> This can cause differences from a strict centralized reference if the centralized run would keep those columns.
 
 ### 5) Survival prediction supports two centering conventions (`centering`)
 - The paper uses the standard Cox form:
 
+  <div align="center">
   
   $$h(t\mid x) = h_0(t)\exp(x^\top \beta)$$
+
+  </div>
 
   which corresponds to defining baseline hazard at $x=0$.
 
@@ -51,16 +58,23 @@ This repository implements the DC-COX workflow and follows the paper’s core al
 
   **(a) `centering=None` (paper convention)**  
   Uses $x^\top\beta$ in the linear predictor, and rescales the provided baseline hazard by a constant factor:
-  $$
-  h_0^{paper}(t) = h_0^{lifelines}(t)\exp(-\bar x^\top\beta).
-  $$
+  
+  <div align="center">
+
+  $$h_0^{paper}(t) = h_0^{lifelines}(t)\exp(-\bar x^\top\beta)$$
+  
+  </div>
+
   Partial hazard uses $\exp(x^\top\beta)$.
 
   **(b) `centering="mean"` (lifelines convention)**  
   Uses $(x-\bar x)^\top\beta$ in the linear predictor and keeps baseline hazard unchanged:
-  $$
-  h(t\mid x) = h_0^{lifelines}(t)\exp((x-\bar x)^\top\beta).
-  $$
+  
+  <div align="center">
+  
+  $$h(t\mid x) = h_0^{lifelines}(t)\exp((x-\bar x)^\top\beta)$$
+  
+  </div>
 
 - Both conventions yield **identical final hazard/survival predictions**, but the *reported* baseline hazard differs by a constant factor.
 
