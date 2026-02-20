@@ -166,7 +166,10 @@ class Projector:
 
     def _compute_Fdr(self, X: Array2D) -> Array2D:
         """
-        Compute the PCs (samples as features).
+        Compute a feature-space dimensionality reduction basis F_DR (e.g., PCA loadings).
+
+        F_DR is in R^{m x m_tilde_DR}.
+        It maps the input features to the reduced feature space.
 
         Parameters
         ----------
@@ -184,16 +187,15 @@ class Projector:
         return U[:, :k] * S[:k]
 
     @staticmethod
-    def _create_random_nonsingular(m_tilde: int) -> Array2D:
+    def _create_random_nonsingular(n: int) -> Array2D:
         """
-        Create a well-conditioned nonsingular random matrix E.
+        Create a random nonsingular matrix.
 
-        The paper uses a random nonsingular matrix E to mix/rotate the columns of
-        [Fbs, Fdr] without changing its column space. For numerical stability we
-        prefer an orthogonal matrix (always invertible, condition number = 1).
+        The paper uses a nonsingular random matrix E. Here we use an orthogonal matrix (QR decomposition)
+        which is a numerically stable special case of a nonsingular matrix.
         """
         # Random orthogonal matrix via QR factorization
-        A = np.random.randn(m_tilde, m_tilde)
+        A = np.random.randn(n, n)
         Q, R = np.linalg.qr(A)
         # Fix sign ambiguity so it's a proper random draw over O(n)
         signs = np.sign(np.diag(R))
@@ -219,7 +221,8 @@ class Projector:
         """
         Perform the linear transformation.
 
-        X tilde = X @ F, where X shape is (nc, md).
+        X_tilde = X @ F, where for a worker (i,j), X_{i,j} is in R^{n_i x m_j}.
+        We compute X_tilde_{i,j} = X_{i,j} F_{i,j} and Xanc_tilde_{i,j} = Xanc_{:,j} F_{i,j}.
         Xanc tilde = Xanc @ F, where Xanc shape is (r, md).
         F = [Fbs, Fdr], where Fbs shape is (md, bs_times)
         and Fdr shape is (md, min(k, len(non-zero singular values))).
@@ -332,7 +335,11 @@ class Regressor:
         Compute the target matrix Gs.
 
         [Xancs_tilde_1, ..., Xancs_tilde_c] = U * S @ Vh.
-        Gc = pinv(Xanc_tilde_c) @ U @ C, where C is the nonsingular matrix.
+        Gc = pinv(Xanc_tilde_c) @ P
+
+        Let [Xanc_tilde_1, ..., Xanc_tilde_c] approx U_hat_m S_hat_m V_hat_m^T.
+        We form P = U_hat_m S_hat_m (corresponding to choosing C = S_hat_m in Eq.(5)),
+        and compute G_i = (Xanc_tilde_i)^dagger P.
 
         Parameters
         ----------
@@ -695,6 +702,10 @@ class SurvivalFunction:
 
         - centering=None: X @ beta (paper convention)
         - centering="mean": (X - mean) @ beta (lifelines convention)
+
+        The paper uses the standard Cox form h(t|x) = h_0(t) * exp(x^T beta);
+        mean-centering is an implementation option to match lifelines' reported
+        baseline_hazard_, not a paper requirement.
 
         Both yield identical final hazard predictions when combined with their
         respective baseline hazards.
