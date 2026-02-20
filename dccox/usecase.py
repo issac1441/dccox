@@ -72,7 +72,7 @@ class Horizontal:
             metadata.set_index("Unnamed: 0", inplace=True)
             metadata.index.name = None
 
-        print(metadata)
+        logging.debug(f"Loaded metadata:\n{metadata}")
 
         # Deal with the target columns
         expected_cols = ["time", "event"]
@@ -80,7 +80,8 @@ class Horizontal:
         for col in expected_cols:
             if col not in metadata.columns:
                 missed_cols.append(col)
-        assert len(missed_cols) == 0, f"Missing columns {missed_cols}."
+        if len(missed_cols) > 0:
+            raise ValueError(f"Missing columns {missed_cols}.")
 
         meta_cols = [] if meta_cols is None else meta_cols
 
@@ -100,24 +101,19 @@ class Horizontal:
                 filter(lambda x: x in metadata.columns, keep_feature_cols)
             )
 
-        # Deal with the sample metadata columns
-        meta = metadata.loc[:, meta_cols]
-
         # Remove samples with the missing values
-        metadata = metadata.loc[:, expected_cols + keep_feature_cols]
+        metadata = metadata.loc[:, expected_cols + keep_feature_cols + meta_cols]
         metadata = metadata.dropna()
+
+        # Deal with the sample metadata columns (after dropna to preserve index alignment)
+        meta = metadata.loc[:, meta_cols]
         if len(metadata) == 0:
             logging.warning("There are no samples left.")
 
-        print(
-            f"\033[95m The feature matrix X:\n \033[0m"
-            f"{metadata.loc[:, keep_feature_cols]}\n"
-            f"\n"
-            f"\033[95m The target matrix y:\n \033[0m"
-            f"{metadata.loc[:, expected_cols]}\n"
-            f"\n"
-            f"\033[95m The metadata:\n \033[0m"
-            f"{meta}\n"
+        logging.info(
+            f"Feature matrix X shape: {metadata.loc[:, keep_feature_cols].shape}, "
+            f"Target matrix y shape: {metadata.loc[:, expected_cols].shape}, "
+            f"Metadata shape: {meta.shape}"
         )
 
         X = metadata.loc[:, keep_feature_cols].to_numpy()
@@ -272,10 +268,14 @@ class Horizontal:
         feature_mean : np.array
             The global means of the features.
         """
-        assert isinstance(Xs_tilde[0], list), "Xs_tilde must be a list of lists."
-        assert isinstance(Xancs_tilde[0], list), "Xancs_tilde must be a list of lists."
-        assert isinstance(ys, list), "y must be a list of 2d arrays."
-        assert isinstance(sums, list), "sums must be a list of 1d arrays."
+        if not isinstance(Xs_tilde[0], list):
+            raise TypeError("Xs_tilde must be a list of lists.")
+        if not isinstance(Xancs_tilde[0], list):
+            raise TypeError("Xancs_tilde must be a list of lists.")
+        if not isinstance(ys, list):
+            raise TypeError("ys must be a list of 2d arrays.")
+        if not isinstance(sums, list):
+            raise TypeError("sums must be a list of 1d arrays.")
         keep_idx = [i for i, Xc in enumerate(Xs_tilde) if Xc[0] is not None]
 
         Xs_tilde = BlockMatrix([Xs_tilde[idx] for idx in keep_idx])

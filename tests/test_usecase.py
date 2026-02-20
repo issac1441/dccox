@@ -35,9 +35,8 @@ class CoxPHRegressionTestCase(unittest.TestCase):
         cls.file_paths = []
         if not os.path.exists(cls.test_dir):
             os.mkdir(cls.test_dir)
-        idx = np.random.choice(training_size, training_size, replace=False)
         cls.n_chunk = 4
-        chunk_size = len(idx) // cls.n_chunk
+        chunk_size = training_size // cls.n_chunk
         for i in range(cls.n_chunk):
             X_ = cls.data.iloc[i * chunk_size : (i + 1) * chunk_size, 2:]
             y_ = cls.data.iloc[i * chunk_size : (i + 1) * chunk_size, 0:2]
@@ -54,14 +53,14 @@ class CoxPHRegressionTestCase(unittest.TestCase):
         shutil.rmtree(cls.test_dir)
 
     def test_missing_time_and_event(self) -> None:
-        """Test that missing time and event columns raise an assertion error."""
+        """Test that missing time and event columns raise a ValueError."""
         fake = pd.DataFrame(
             np.random.randn(4, 5), columns=["time"] + [f"f{i}" for i in range(4)]
         )
         filepath = f"{self.test_dir}/fake.clinical"
         fake.to_csv(filepath, index=None)
 
-        with pytest.raises(AssertionError, match="Missing columns \\['event'\\]"):
+        with pytest.raises(ValueError, match="Missing columns \\['event'\\]"):
             self.dccox.local_load_metadata(filepath, keep_feature_cols=["f1", "f2"])
 
     def test_drop_missings(self) -> None:

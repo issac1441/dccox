@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from functools import reduce
+from typing import Self
 
 from lifelines import CoxPHFitter
 import numpy as np
@@ -354,14 +354,18 @@ class Regressor:
         # U: (r x m hat), m hat equals to len(S)
         U, S, _ = np.linalg.svd(Xancs_)
 
-        m_hat = self.m_hat if self.m_hat else len(S)
+        m_hat = self.m_hat if self.m_hat is not None else len(S)
         P = U[:, :m_hat] * S[:m_hat]
 
         Gs = []
         for c in range(Xancs_tilde.shape[0]):
             # Gc: m tilde x m hat
             Gc = np.linalg.pinv(Xancs_tilde[c, :]) @ P
-            idxs = np.cumsum([0, *Xancs_tilde.dsizes])
+            # Use client c's dsizes, not blocks[0]'s
+            dsizes_c = [
+                Xancs_tilde.blocks[c][d].shape[1] for d in range(Xancs_tilde.shape[1])
+            ]
+            idxs = np.cumsum([0, *dsizes_c])
             # Gcd: mc tilde x m hat
             Gs.append([Gc[idxs[i] : idxs[i + 1], :] for i in range(len(idxs) - 1)])
 
@@ -423,7 +427,7 @@ class Regressor:
         Xancs_tilde: BlockMatrix,
         durations: Array1D,
         events: Array1D,
-    ) -> None:
+    ) -> Self:
         r"""
         Calculate the target matrix G and perform the Cox-PH regression.
 
@@ -647,8 +651,7 @@ class SurvivalFunction:
         .. math::
             \\mathbf{X}\beta
         """
-        X = X.loc[:, self.__coef.index]
-        X -= self.__mean
+        X = X.loc[:, self.__coef.index] - self.__mean
         return X @ self.__coef
 
     def predict_partial_hazard(self, X: pd.DataFrame) -> pd.Series:
@@ -682,7 +685,7 @@ class SurvivalFunction:
         # TODO: Add Interpolation
         times = [t_ for t_ in self.__baseline_hazard.index if t_ <= t]
         hazards_ = [self.hazard_at(t_) for t_ in times]
-        return reduce(lambda h1, h2: h1 + h2, hazards_)
+        return sum(hazards_, 0.0)
 
     def survival_at(self, t: int | float) -> float:
         r"""

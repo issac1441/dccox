@@ -108,6 +108,8 @@ class BlockMatrix:
             return [ls[idx]]
         elif isinstance(idx, (list, tuple)):
             return [ls[i] for i in idx]
+        else:
+            raise TypeError(f"Unsupported index type: {type(idx).__name__}")
 
     def __getitem__(self, indices: slice | int | list | tuple) -> np.ndarray:
         """
@@ -169,3 +171,5 @@ class BlockMatrix:
             return np.concatenate([np.concatenate(mc) for mc in M], axis=1)
         elif self.axis == 1:
             return np.block(M)
+        else:
+            raise ValueError(f"Unsupported axis value: {self.axis}. Must be 0 or 1.")
