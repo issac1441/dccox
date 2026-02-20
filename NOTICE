@@ -6,4 +6,9 @@ This project is licensed under ARL-1.1.
 See LICENSE for full terms.
 
 Third-party components:
-- None (or list any third-party libraries with their licenses)
+This software depends on the following open-source packages, distributed under their respective licenses:
+- lifelines (MIT License)
+- numpy (BSD-3-Clause License)
+- pandas (BSD-3-Clause License)
+- pydantic (MIT License)
+- scipy (BSD-3-Clause License)

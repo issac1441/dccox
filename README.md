@@ -7,6 +7,9 @@
 
 An **UNOFFICIAL** implementation of [DC-COX](https://www.sciencedirect.com/science/article/pii/S1532046422002696), a federated Cox PH regression approach.
 
+> [!IMPORTANT]
+> This project is **not affiliated with or endorsed by** the original authors or the publisher. The DC-COX method is credited to the original paper; this repository provides an independent software implementation.
+
 ## Differences from the DC-COX paper
 
 This repository implements the DC-COX workflow and follows the paper’s core algorithms, but includes several **engineering/stability** choices and **output conventions** that can differ from a strict paper-only implementation.
@@ -24,8 +27,8 @@ This repository implements the DC-COX workflow and follows the paper’s core al
 
 - This implementation constructs $F_{DR} \in \mathbb{R}^{m\times \tilde m_{DR}}$ using a **feature-space PCA basis** computed via SVD (i.e., PCA loadings / directions).
 
-### 3) Random nonsingular matrix \(E\): orthogonal matrix via QR
-- The paper requires \(E\) to be a **random nonsingular matrix**.
+### 3) Random nonsingular matrix $E$: orthogonal matrix via QR
+- The paper requires $E$ to be a **random nonsingular matrix**.
 - This implementation uses a **random orthogonal matrix** (via QR decomposition) as a numerically stable special case of nonsingular matrices.
 
 ### 4) Master-side stability: dropping low-variance columns in $\hat X$
@@ -42,7 +45,7 @@ This repository implements the DC-COX workflow and follows the paper’s core al
   
   $$h(t\mid x) = h_0(t)\exp(x^\top \beta)$$
 
-  which corresponds to defining baseline hazard at \(x=0\).
+  which corresponds to defining baseline hazard at $x=0$.
 
 - `lifelines` reports baseline hazard under a mean-centered convention. To support both, this implementation provides:
 
@@ -204,9 +207,30 @@ dccox/
 If you use the DC-COX method in your research, please cite the original paper:
 > [DC-COX: Data collaboration Cox proportional hazards model for privacy-preserving survival analysis on multiple parties](https://www.sciencedirect.com/science/article/pii/S1532046422002696)
 
+```bibtex
+@article{imakura2023dccox,
+  title={DC-COX: Data collaboration Cox proportional hazards model for privacy-preserving survival analysis on multiple parties},
+  author={Imakura, Akira and Ye, Xiucai and Ma, Xinyu and Arai, Watchara and Sakurai, Tetsuya},
+  journal={Journal of Biomedical Informatics},
+  volume={137},
+  pages={104264},
+  year={2023},
+  doi={10.1016/j.jbi.2022.104264}
+}
+```
+
 ### This Implementation (Software)
 If you use this specific software implementation, please cite it using the metadata in [`CITATION.cff`](CITATION.cff) or as follows:
 > Wen, J.-H. (2026). dccox: An unofficial implementation of DC-COX [Computer software]. https://github.com/issac1441/dccox
+
+```bibtex
+@software{wen2026dccox,
+  author = {Wen, Jian-Hung},
+  title = {dccox: An unofficial implementation of DC-COX},
+  url = {https://github.com/issac1441/dccox},
+  year = {2026}
+}
+```
 
 
 ## 🤝 Contributing
@@ -217,3 +241,5 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for gu
 ## 📄 License
 
 This project is licensed under the ARL-1.1. See the [LICENSE](LICENSE) file for details.
+
+> **Note on Third-party Components**: This software depends on third-party open-source packages (including `lifelines`, `numpy`, `pandas`, `pydantic`, `scipy`) distributed under their respective licenses. Please refer to `NOTICE` for details.
