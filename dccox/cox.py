@@ -101,7 +101,7 @@ class Projector:
 
         Returns
         -------
-        np.ndarray
+        Array2D
             The transformation matrix F with shape (n_features, m_tilde).
         """
         return self.__F
@@ -113,7 +113,7 @@ class Projector:
 
         Returns
         -------
-        np.ndarray
+        Array2D
             The transformed feature matrix X tilde with shape (n_samples, m_tilde).
         """
         return self.__X_tilde
@@ -125,7 +125,7 @@ class Projector:
 
         Returns
         -------
-        np.ndarray
+        Array2D
             The transformed global anchor matrix Xanc tilde with shape (r, m_tilde).
         """
         return self.__Xanc_tilde
@@ -136,16 +136,16 @@ class Projector:
 
         Parameters
         ----------
-        X : np.array
+        X : Array2D
             The feature matrix with shape (n_samples, n_features).
-        events : np.array
+        events : Array1D
             The one-hot event vector with shape (n_samples,).
-        durations : np.array
+        durations : Array1D
             The one-hot duration vector with shape (n_samples,).
 
         Returns
         -------
-        Fbs : np.array
+        Fbs : Array2D
             The concatenated betas from each bootstrap regression with shape (n_features, n_times).
         """
         coefs = []
@@ -170,12 +170,12 @@ class Projector:
 
         Parameters
         ----------
-        X : np.array
+        X : Array2D
             The feature matrix with shape (n_samples, n_features).
 
         Returns
         -------
-        Fdr : np.array
+        Fdr : Array2D
             The PCs with shape (n_features, min(k, len(non-zero singular values))).
         """
         X_shift = (X - X.mean(axis=0, keepdims=True)).T
@@ -226,15 +226,15 @@ class Projector:
 
         Parameters
         ----------
-        X : np.array
+        X : Array2D
             The feature matrix with shape (nc, md),
             where nc is the number of samples in Xc,: and md is the number of features in X:,d.
-        Xanc : np.array
+        Xanc : Array2D
             The global anchor matrix with shape (r, md).
             where r is the pseudo-number of samples of Xanc and md is the number of features in X:,d.
-        events : np.array
+        events : Array1D
             The one-hot event vecotr with shape (nc,).
-        durations : np.array
+        durations : Array1D
             The time vector with shape (nc,).
         """
         self._compute_F(X, events, durations)
@@ -402,9 +402,9 @@ class Regressor:
         Gs : BlockMatrix
             The `BlockMatrix(axis=0)`.
             For each G in BlockMatrix, the shape is (mc tilde, m hat).
-        durations : np.ndarray
+        durations : Array1D
             The duration time vector with shape (n,).
-        events : np.ndarray
+        events : Array1D
             The one-hot event vector with shape (n,).
             e.g. 1 for dead, 0 for survived.
         """
@@ -457,9 +457,9 @@ class Regressor:
             The proxy data with shape (c, d).
         Xancs_tilde : BlockMatrix
             The ancillary data with shape (c, d).
-        durations : np.ndarray
+        durations : Array1D
             The duration time vector with shape (n,).
-        events : np.ndarray
+        events : Array1D
             The one-hot event vector with shape (n,).
             e.g. 1 for dead, 0 for survived.
         """

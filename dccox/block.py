@@ -17,7 +17,7 @@ class BlockMatrix:
 
     Attributes
     ----------
-    blocks : list of lists of arrays
+    blocks : list of lists of Array2D
         The list stores the lists of arrays
     axis : int
         The axis of unequal sizes.
@@ -33,7 +33,7 @@ class BlockMatrix:
 
         Parameters
         ----------
-        Ms : list of lists of arrays
+        Ms : list of lists of Array2D
             The list stores the lists of arrays
         axis : int
             The axis of unequal sizes.
@@ -122,7 +122,7 @@ class BlockMatrix:
 
         Returns
         -------
-        block : np.array
+        block : Array2D
             The concatenated matrix.
 
         Examples

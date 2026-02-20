@@ -30,7 +30,7 @@ class Horizontal:
 
         Returns
         -------
-        Xanc : np.array
+        Xanc : Array2D
             The anchor matrix with shape (r, n_features).
         """
         return np.random.randn(r, n_features)
@@ -58,9 +58,9 @@ class Horizontal:
 
         Returns
         -------
-        X : np.array
+        X : Array2D
             The feature matrix with shape (n_samples, n_features).
-        y : np.array
+        y : Array2D
             The concatenated time and event vectors with shape (n_samples, 2).
         keep_feature_cols : list of str
             The features to be perform Cox-PH regression.
@@ -141,12 +141,12 @@ class Horizontal:
 
         Parameters
         ----------
-        X : np.array
+        X : Array2D
             The feature matrix with shape (n_samples, n_features).
-        Xanc : np.array
+        Xanc : Array2D
             The global anchor matrix with shape (r, n_features).
             where r is the pseudo-number of samples of Xanc.
-        y : np.array
+        y : Array2D
             The concatenated time and event vectors with shape (n_samples, 2).
         k : int
             The latent dimension of Fdr. Notice that the ultimate dimension is min(k, len(S)),
@@ -168,14 +168,14 @@ class Horizontal:
 
         Returns
         -------
-        F : np.array
+        F : Array2D
             The linear projection matrix to be used for creating the projected matrices,
             X_tilde and Xanc_tilde, its shape is (n_features, m tilde).
-        X_tilde : list of np.array
+        X_tilde : list of Array2D
             The projected feature matrix with shape (n_samples, m tilde).
-        Xanc_tilde : list of np.array
+        Xanc_tilde : list of Array2D
             The projected global anchor matrix with shape (r, m tilde).
-        feature_sum : np.array
+        feature_sum : Array1D
             The sums of the features.
         """
         if len(X) == 0:
@@ -201,8 +201,8 @@ class Horizontal:
 
     @staticmethod
     def _global_compute_coef_tilde(
-        coef: np.ndarray, coef_var: np.ndarray, Gs: BlockMatrix
-    ) -> tuple[list[list[np.ndarray]], list[list[np.ndarray]]]:
+        coef: Array1D, coef_var: Array2D, Gs: BlockMatrix
+    ) -> tuple[list[list[Array1D]], list[list[Array2D]]]:
         coef_ = [
             [Gs[c, d] @ coef for d in range(Gs.shape[1])] for c in range(Gs.shape[0])
         ]
@@ -229,23 +229,23 @@ class Horizontal:
 
         Parameters
         ----------
-        Xs_tilde : list of lists of np.array
+        Xs_tilde : list of lists of Array2D
             The data structure is:
             [
                 [X_tilde],
                 [X_tilde],...
             ]
             The shape for each projected feature matrix is (nc, m tilde).
-        Xancs_tilde : list of lists of np.array | list of lists of None
+        Xancs_tilde : list of lists of Array2D | list of lists of None
             The data structure is:
             [
                 [Xanc_tilde],
                 [Xanc_tilde],...
             ]
             The shape for each projected global anchor matrix is (r, m tilde).
-        ys : list of np.array
+        ys : list of Array2D
             The concatenated time and event vectors with shape (nc, 2).
-        sums : list of np.array
+        sums : list of Array1D
             The sums of the features.
         alpha : float
             The level in the confidence intervals.
@@ -261,13 +261,13 @@ class Horizontal:
 
         Returns
         -------
-        coef : list of list of np.array
+        coef : list of list of Array1D
             The beta tilde vector with shape (m tilde,).
-        coef_var : list of list of np.array
+        coef_var : list of list of Array2D
             The variance-covariance matrix with shape (m tilde, m tilde).
         baseline_hazard : pd.DataFrame
             The baseline hazard values, where the index is the time.
-        feature_mean : np.array
+        feature_mean : Array1D
             The global means of the features.
         """
         if not isinstance(Xs_tilde[0], list):
@@ -321,15 +321,15 @@ class Horizontal:
         ----------
         keep_feature_cols : list of strings
             The features to be perform Cox-PH regression.
-        coef : np.array
+        coef : Array1D
             The beta tilde vector with shape (m tilde,).
-        coef_var : np.array
+        coef_var : Array2D
             The variance-covariance matrix with shape (m tilde, m tilde).
         baseline_hazard : pd.DataFrame
             The baseline hazard values, where the index is the time.
-        mean : np.array
+        mean : Array1D
             The global means of the features.
-        F : np.array
+        F : Array2D
             The linear projection matrix to be used for creating the projected matrices,
             X_tilde and Xanc_tilde, its shape is (n_features, m tilde).
 
