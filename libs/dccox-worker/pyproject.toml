@@ -1,0 +1,14 @@
+[project]
+name = "dccox-worker"
+version = "0.1.0"
+description = "DC-Cox worker node for federated analysis."
+authors = [
+    { name = "Jian-Hung Wen", email = "thetimmy0524@gmail.com" }
+]
+requires-python = ">=3.11"
+license = { text = "ARL-1.1" }
+dependencies = [
+    "dccox",
+    "gradio>=6.6.0",
+    "httpx>=0.28.0",
+]

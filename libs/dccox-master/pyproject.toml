@@ -1,0 +1,14 @@
+[project]
+name = "dccox-master"
+version = "0.1.0"
+description = "DC-Cox master node for federated analysis."
+authors = [
+    { name = "Jian-Hung Wen", email = "thetimmy0524@gmail.com" }
+]
+requires-python = ">=3.11"
+license = { text = "ARL-1.1" }
+dependencies = [
+    "dccox",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+]
