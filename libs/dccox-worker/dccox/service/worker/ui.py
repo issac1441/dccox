@@ -427,6 +427,15 @@ def create_ui() -> gr.Blocks:
             outputs=[workspace_status],
         )
 
+        def _format_feature(value: pd.Index | tuple[str] | list[str]) -> str:
+            if isinstance(value, pd.Index):
+                parts = value.tolist()
+            elif isinstance(value, (tuple, list)):
+                parts = value
+            else:
+                return str(value)
+            return " + ".join(str(part) for part in parts)
+
         def handle_run(
             worker: DCCoxWorker | None, pid: str | None, dpath: str
         ) -> tuple[str, Any]:
@@ -438,6 +447,12 @@ def create_ui() -> gr.Blocks:
             try:
                 surv = worker.run_local_pipeline(pid, dpath.strip(), poll_interval=2.0)
                 summary_df = surv.summary
+                if isinstance(summary_df, pd.DataFrame) and not summary_df.empty:
+                    summary_df = summary_df.reset_index()
+                    summary_df.rename(
+                        columns={summary_df.columns[0]: "feature"}, inplace=True
+                    )
+                    summary_df["feature"] = summary_df["feature"].apply(_format_feature)
                 return "✅ Local compute & global aggregation completed!", summary_df
             except Exception as e:
                 return f"❌ Analysis failed: {e}", None
