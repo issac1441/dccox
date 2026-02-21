@@ -75,7 +75,13 @@ def create_ui() -> gr.Blocks:
                 gr.Markdown("### 🏢 Available Projects")
                 refresh_btn = gr.Button("Refresh Projects")
                 projects_table = gr.Dataframe(
-                    headers=["ID", "Name", "Status", "Workers Count", "Created"],
+                    headers=[
+                        "Project ID",
+                        "Project Name",
+                        "Status",
+                        "Workers Count",
+                        "Created At",
+                    ],
                     interactive=False,
                 )
 
@@ -224,7 +230,13 @@ def create_ui() -> gr.Blocks:
             with gr.TabItem("History", id="history"):
                 history_refresh_btn = gr.Button("Refresh History")
                 history_table = gr.Dataframe(
-                    headers=["ID", "Name", "Created"],
+                    headers=[
+                        "Project ID",
+                        "Project Name",
+                        "Status",
+                        "Workers Count",
+                        "Created At",
+                    ],
                     interactive=False,
                 )
                 with gr.Row():
