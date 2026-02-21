@@ -32,5 +32,9 @@ COPY . /app
 # Add virtual environment to PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Expose the worker port (default 8001)
+# Can be overridden by DCCOX_WORKER_PORT
+EXPOSE 8001
+
 # Run the application
-CMD ["python", "-m", "dccox.main"]
+CMD ["python", "-m", "dccox.service.worker.ui"]

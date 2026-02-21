@@ -32,5 +32,9 @@ COPY . /app
 # Add virtual environment to PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Expose the master port (default 8000)
+# Can be overridden by DCCOX_MASTER_PORT
+EXPOSE 8000
+
 # Run the application
-CMD ["python", "-m", "dccox.main"]
+CMD ["python", "-m", "dccox.service.master.app"]

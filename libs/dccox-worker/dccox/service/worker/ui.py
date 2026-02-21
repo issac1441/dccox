@@ -10,8 +10,8 @@ import gradio as gr
 import pandas as pd
 
 from dccox.service.master.schemas import ProjectSchema
-
-from .worker import DCCoxWorker
+from dccox.service.worker.config import settings
+from dccox.service.worker.worker import DCCoxWorker
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def create_ui() -> gr.Blocks:
                 with gr.Row():
                     master_url = gr.Textbox(
                         label="Master URL",
-                        value="http://localhost:8000",
+                        value=settings.master_url,
                         scale=3,
                     )
                     connect_btn = gr.Button("Connect to Master", variant="primary")
@@ -187,7 +187,7 @@ def create_ui() -> gr.Blocks:
                 with gr.Row():
                     join_project_id = gr.Textbox(label="Project ID to Join")
                     worker_name_input = gr.Textbox(
-                        label="Your Worker Name", value="my-worker"
+                        label="Your Worker Name", value=settings.worker_name
                     )
                 data_path = gr.Textbox(
                     label="Local Clinical CSV File Path",
@@ -492,6 +492,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "dccox.service.worker.ui:app",
         host="0.0.0.0",
-        port=8001,
-        reload=True,
+        port=settings.worker_port,
+        reload=False,
     )
