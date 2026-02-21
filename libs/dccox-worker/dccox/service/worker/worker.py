@@ -208,6 +208,12 @@ class DCCoxWorker:
             logger.debug("Waiting for global results...")
             time.sleep(interval)
 
+    def get_worker_results(self, project_id: str, worker_id: str) -> dict:
+        """Fetch global results for a specific worker from the master."""
+        resp = self._http.get(f"/api/projects/{project_id}/results/{worker_id}")
+        resp.raise_for_status()
+        return resp.json()
+
     def close(self) -> None:
         """Close the HTTP session."""
         self._http.close()
