@@ -137,29 +137,28 @@ def create_ui() -> gr.Blocks:
                             info=fields["bs_replace"].description,
                         )
 
-                with gr.Accordion("Regression Hyperparameters", open=True):
-                    with gr.Row():
-                        p_alpha = gr.Slider(
-                            0.01,
-                            0.20,
-                            value=fields["alpha"].default,
-                            step=0.01,
-                            label="alpha",
-                            info=fields["alpha"].description,
-                        )
-                        p_step_size = gr.Slider(
-                            0.1,
-                            1.0,
-                            value=fields["step_size"].default,
-                            step=0.1,
-                            label="step_size",
-                            info=fields["step_size"].description,
-                        )
-                        p_var_thres = gr.Number(
-                            value=fields["var_thres"].default,
-                            label="var_thres",
-                            info=fields["var_thres"].description,
-                        )
+                with gr.Accordion("Regression Hyperparameters", open=True), gr.Row():
+                    p_alpha = gr.Slider(
+                        0.01,
+                        0.20,
+                        value=fields["alpha"].default,
+                        step=0.01,
+                        label="alpha",
+                        info=fields["alpha"].description,
+                    )
+                    p_step_size = gr.Slider(
+                        0.1,
+                        1.0,
+                        value=fields["step_size"].default,
+                        step=0.1,
+                        label="step_size",
+                        info=fields["step_size"].description,
+                    )
+                    p_var_thres = gr.Number(
+                        value=fields["var_thres"].default,
+                        label="var_thres",
+                        info=fields["var_thres"].description,
+                    )
 
                 with gr.Accordion("Data Options", open=True), gr.Row():
                     p_centering = gr.Dropdown(
