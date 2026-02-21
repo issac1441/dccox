@@ -22,6 +22,23 @@ class ProjectStore:
         self._xanc: dict[str, np.ndarray] = {}
         self._proxy_data: dict[str, dict[str, dict]] = {}
         self._results: dict[str, dict] = {}
+        self._events: dict[str, list[dict[str, str]]] = {}
+
+    def add_event(self, project_id: str, message: str) -> None:
+        """Add a timestamped event to the project's event log."""
+        if project_id not in self._events:
+            self._events[project_id] = []
+
+        event = {
+            "time": datetime.now(tz=UTC).isoformat(),
+            "message": message,
+        }
+        self._events[project_id].append(event)
+        logger.info("[Project %s] %s", project_id, message)
+
+    def get_events(self, project_id: str) -> list[dict[str, str]]:
+        """Get the event log for a project."""
+        return self._events.get(project_id, [])
 
     # ── Project Management ─────────────────────────────────────────────
 
@@ -31,13 +48,16 @@ class ProjectStore:
         self._projects[project_id] = {
             "id": project_id,
             "config": config,
-            "status": ProjectStatus.CREATED,
+            "status": ProjectStatus.JOINING,
             "workers": [],
             "n_features": None,
             "error": None,
             "created_at": datetime.now(tz=UTC).isoformat(),
         }
         self._proxy_data[project_id] = {}
+        self.add_event(
+            project_id, f"Project '{config.name}' created. Waiting for workers."
+        )
         return project_id
 
     def get_project(self, project_id: str) -> dict | None:
@@ -72,9 +92,25 @@ class ProjectStore:
                 n_features=n_features,
             )
         )
+        self.add_event(
+            project_id,
+            f"Worker '{worker_name}' joined as '{worker_id}' (n_features: {n_features}).",
+        )
         return worker_id
 
     # ── Pipeline: Start ────────────────────────────────────────────────
+
+    def lock_project(self, project_id: str) -> None:
+        """Lock the project to prevent further workers from joining."""
+        project = self._projects[project_id]
+        if project["status"] != ProjectStatus.JOINING:
+            raise ValueError(f"Cannot lock project in '{project['status']}' state")
+
+        project["status"] = ProjectStatus.LOCKED
+        self.add_event(
+            project_id,
+            f"Project locked. Total workers: {len(project['workers'])}. Waiting to start.",
+        )
 
     def start_project(self, project_id: str) -> None:
         """Start analysis: generate Xanc."""
@@ -85,8 +121,11 @@ class ProjectStore:
         uc = Horizontal()
         xanc = uc.global_create_Xanc(n_features, r=config.r)
         self._xanc[project_id] = xanc
-        project["status"] = ProjectStatus.STARTED
-        logger.info("Project %s started — Xanc shape %s", project_id, xanc.shape)
+        project["status"] = ProjectStatus.COMPUTING
+        self.add_event(
+            project_id,
+            f"Analysis started. Generated Xanc matrix (shape: {xanc.shape}).",
+        )
 
     def get_xanc(self, project_id: str) -> np.ndarray | None:
         """Get the Xanc matrix for a project."""
@@ -119,11 +158,9 @@ class ProjectStore:
 
         n_workers = len(project["workers"])
         n_submitted = len(self._proxy_data[project_id])
-        logger.info(
-            "Project %s: %d/%d workers submitted proxy data",
+        self.add_event(
             project_id,
-            n_submitted,
-            n_workers,
+            f"Worker '{worker_id}' submitted proxy data ({n_submitted}/{n_workers}).",
         )
 
         if n_submitted >= n_workers:
@@ -138,6 +175,8 @@ class ProjectStore:
         project = self._projects[project_id]
         config: ProjectSchema = project["config"]
         worker_ids = [w.worker_id for w in project["workers"]]
+
+        self.add_event(project_id, "All proxy data received. Initiating global fit...")
 
         try:
             # Reconstruct arrays from JSON
@@ -184,12 +223,13 @@ class ProjectStore:
                 }
 
             project["status"] = ProjectStatus.COMPLETED
-            logger.info("Project %s: global_fit_model completed", project_id)
+            self.add_event(project_id, "Global fit completed successfully.")
 
-        except Exception:
-            logger.exception("Project %s: global fit failed", project_id)
+        except Exception as e:
             project["status"] = ProjectStatus.FAILED
             project["error"] = "global_fit_model failed"
+            self.add_event(project_id, f"Global fit failed: {e}")
+            logger.exception("Project %s: global fit failed", project_id)
             raise
 
     # ── Pipeline: Results ──────────────────────────────────────────────

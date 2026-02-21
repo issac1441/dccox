@@ -74,8 +74,9 @@ class WorkerInfo(BaseModel):
 class ProjectStatus(StrEnum):
     """Project lifecycle status."""
 
-    CREATED = "created"
-    STARTED = "started"
+    JOINING = "joining"
+    LOCKED = "locked"
+    COMPUTING = "computing"
     COMPLETED = "completed"
     FAILED = "failed"
 

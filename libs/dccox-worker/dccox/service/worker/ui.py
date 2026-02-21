@@ -9,6 +9,8 @@ from fastapi import FastAPI
 import gradio as gr
 import pandas as pd
 
+from dccox.service.master.schemas import ProjectSchema
+
 from .worker import DCCoxWorker
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,11 @@ def create_ui() -> gr.Blocks:
         font-size: 1.1rem !important;
         margin-top: 0 !important;
     }
+    .event-log textarea {
+        font-family: monospace;
+        background-color: #1e1e1e !important;
+        color: #00ff00 !important;
+    }
     """
 
     theme = gr.themes.Soft(
@@ -42,9 +49,9 @@ def create_ui() -> gr.Blocks:
     )
 
     with gr.Blocks(title="DC-Cox Worker") as app:
-        # ── State ──────────────────────────────────────────────────────
+        # ── Global State ───────────────────────────────────────────────
         worker_state = gr.State(value=None)  # DCCoxWorker instance
-        project_id_state = gr.State(value=None)
+        active_project_id = gr.State(value=None)
 
         # ── Header ─────────────────────────────────────────────────────
         gr.Markdown('<p class="main-title">DC-Cox Worker</p>')
@@ -53,83 +60,190 @@ def create_ui() -> gr.Blocks:
         )
 
         with gr.Tabs():
-            # ── Tab 1: Connect & Projects ──────────────────────────────
-            with gr.TabItem("Setup", id="setup"):
+            # ── Tab 1: Dashboard ───────────────────────────────────────
+            with gr.TabItem("Dashboard", id="dashboard"):
                 with gr.Row():
                     master_url = gr.Textbox(
                         label="Master URL",
                         value="http://localhost:8000",
                         scale=3,
                     )
-                    connect_btn = gr.Button("Connect", variant="primary")
+                    connect_btn = gr.Button("Connect to Master", variant="primary")
                 connect_status = gr.Markdown("")
 
                 gr.Markdown("---")
-                gr.Markdown("### Create New Project")
-                with gr.Row():
-                    project_name = gr.Textbox(label="Project Name", scale=2)
-                    use_case = gr.Dropdown(
-                        choices=["horizontal"],
-                        value="horizontal",
-                        label="Use Case",
-                    )
-                with gr.Accordion("Hyperparameters", open=False):
-                    with gr.Row():
-                        k_input = gr.Slider(1, 50, value=20, step=1, label="k")
-                        r_input = gr.Slider(10, 500, value=100, step=10, label="r")
-                    with gr.Row():
-                        alpha_input = gr.Slider(
-                            0.01, 0.20, value=0.05, step=0.01, label="alpha"
-                        )
-                        step_size_input = gr.Slider(
-                            0.1, 1.0, value=0.5, step=0.1, label="Step size"
-                        )
-                create_project_btn = gr.Button("Create Project")
-                create_status = gr.Markdown("")
-
-                gr.Markdown("---")
-                gr.Markdown("### Existing Projects")
-                refresh_btn = gr.Button("Refresh")
+                gr.Markdown("### 🏢 Available Projects")
+                refresh_btn = gr.Button("Refresh Projects")
                 projects_table = gr.Dataframe(
-                    headers=["ID", "Name", "Status", "Workers"],
+                    headers=["ID", "Name", "Status", "Workers Count", "Created"],
                     interactive=False,
                 )
 
-            # ── Tab 2: Join & Run ──────────────────────────────────────
-            with gr.TabItem("Analysis", id="analysis"):
+            # ── Tab 2: Create Project ──────────────────────────────────
+            with gr.TabItem("Create Project", id="create"):
+                gr.Markdown("### Create a New Analysis Project")
+
+                # Dynamically build UI from Pydantic Schema
+                fields = ProjectSchema.model_fields
+
                 with gr.Row():
-                    join_project_id = gr.Textbox(label="Project ID")
+                    p_name = gr.Textbox(
+                        label="Project Name", info=fields["name"].description, scale=2
+                    )
+                    p_use_case = gr.Dropdown(
+                        choices=["horizontal"],
+                        value="horizontal",
+                        label="Use Case",
+                        info=fields["use_case"].description,
+                    )
+                with gr.Accordion("Projection Hyperparameters", open=True):
+                    with gr.Row():
+                        p_k = gr.Slider(
+                            1,
+                            50,
+                            value=fields["k"].default,
+                            step=1,
+                            label="k",
+                            info=fields["k"].description,
+                        )
+                        p_r = gr.Slider(
+                            10,
+                            500,
+                            value=fields["r"].default,
+                            step=10,
+                            label="r",
+                            info=fields["r"].description,
+                        )
+                    with gr.Row():
+                        p_bs_prop = gr.Slider(
+                            0.1,
+                            1.0,
+                            value=fields["bs_prop"].default,
+                            step=0.1,
+                            label="bs_prop",
+                            info=fields["bs_prop"].description,
+                        )
+                        p_bs_times = gr.Slider(
+                            1,
+                            100,
+                            value=fields["bs_times"].default,
+                            step=1,
+                            label="bs_times",
+                            info=fields["bs_times"].description,
+                        )
+                        p_bs_replace = gr.Checkbox(
+                            value=fields["bs_replace"].default,
+                            label="bs_replace",
+                            info=fields["bs_replace"].description,
+                        )
+
+                with gr.Accordion("Regression Hyperparameters", open=True):
+                    with gr.Row():
+                        p_alpha = gr.Slider(
+                            0.01,
+                            0.20,
+                            value=fields["alpha"].default,
+                            step=0.01,
+                            label="alpha",
+                            info=fields["alpha"].description,
+                        )
+                        p_step_size = gr.Slider(
+                            0.1,
+                            1.0,
+                            value=fields["step_size"].default,
+                            step=0.1,
+                            label="step_size",
+                            info=fields["step_size"].description,
+                        )
+                        p_var_thres = gr.Number(
+                            value=fields["var_thres"].default,
+                            label="var_thres",
+                            info=fields["var_thres"].description,
+                        )
+
+                with gr.Accordion("Data Options", open=True), gr.Row():
+                    p_centering = gr.Dropdown(
+                        choices=["mean", "none"],
+                        value="none",
+                        label="centering",
+                        info=fields["centering"].description,
+                    )
+                    p_keep_features = gr.Textbox(
+                        value=",".join(fields["keep_feature_cols"].default),
+                        label="keep_feature_cols",
+                        info=fields["keep_feature_cols"].description
+                        + " (comma separated)",
+                    )
+                    p_meta_cols = gr.Textbox(
+                        value=",".join(fields["meta_cols"].default),
+                        label="meta_cols",
+                        info=fields["meta_cols"].description + " (comma separated)",
+                    )
+
+                create_project_btn = gr.Button("Create Project", variant="primary")
+                create_status = gr.Markdown("")
+
+            # ── Tab 3: Active Workspace ────────────────────────────────
+            with gr.TabItem("Active Workspace", id="workspace"):
+                with gr.Row():
+                    join_project_id = gr.Textbox(label="Project ID to Join")
                     worker_name_input = gr.Textbox(
-                        label="Worker Name", value="my-worker"
+                        label="Your Worker Name", value="my-worker"
                     )
                 data_path = gr.Textbox(
-                    label="Local CSV Data Path",
+                    label="Local Clinical CSV File Path",
                     placeholder="/path/to/clinical.csv",
                 )
-                with gr.Row():
-                    join_btn = gr.Button("Join Project")
-                    start_btn = gr.Button("Start Project", variant="secondary")
-                    run_btn = gr.Button("Run Analysis", variant="primary", size="lg")
-                analysis_status = gr.Markdown("")
 
-            # ── Tab 3: Results ─────────────────────────────────────────
-            with gr.TabItem("Results", id="results"):
-                summary_table = gr.Dataframe(
-                    label="Coefficients Summary", interactive=False
+                with gr.Row():
+                    join_btn = gr.Button("1. Join Project")
+                    lock_btn = gr.Button(
+                        "2. Lock Project (Creator)", variant="secondary"
+                    )
+                    start_btn = gr.Button(
+                        "3. Start Analysis (Creator)", variant="secondary"
+                    )
+                    run_btn = gr.Button("4. Run Local Compute", variant="primary")
+
+                workspace_status = gr.Markdown("")
+
+                gr.Markdown("### Real-time Event Log")
+                event_log_area = gr.TextArea(
+                    interactive=False,
+                    label="Server Events",
+                    lines=10,
+                    elem_classes="event-log",
+                    autoscroll=True,
                 )
-                results_json = gr.JSON(label="Full Results")
+
+                # Summary results will appear here after run
+                summary_table = gr.Dataframe(
+                    label="My Results: Coefficients Summary", interactive=False
+                )
+
+            # ── Tab 4: History ─────────────────────────────────────────
+            with gr.TabItem("History", id="history"):
+                history_refresh_btn = gr.Button("Refresh History")
+                history_table = gr.Dataframe(
+                    headers=["ID", "Name", "Created"],
+                    interactive=False,
+                )
+                with gr.Row():
+                    history_pid = gr.Textbox(label="Project ID")
+                    history_wid = gr.Textbox(label="Worker Name/ID (optional)")
+                    fetch_history_btn = gr.Button("Fetch Results")
+
+                history_results = gr.JSON(label="Full Results")
 
         # ── Event Handlers ─────────────────────────────────────────────
 
-        def handle_connect(
-            url: str,
-        ) -> tuple[Any, str]:
+        def handle_connect(url: str) -> tuple[Any, str]:
             try:
                 c = DCCoxWorker(url)
                 c.list_projects()  # smoke test
-                return c, "Connected to master"
+                return c, f"**Connected** to `{url}` successfully!"
             except Exception as e:
-                return None, f"Connection failed: {e}"
+                return None, f"**Connection failed**: {e}"
 
         connect_btn.click(
             fn=handle_connect,
@@ -143,75 +257,103 @@ def create_ui() -> gr.Blocks:
             uc: str,
             k: float,
             r: float,
+            bs_p: float,
+            bs_t: float,
+            bs_r: bool,
             alpha: float,
-            step_size: float,
+            step: float,
+            var_t: float,
+            cent: str,
+            keep_f: str,
+            meta_c: str,
         ) -> str:
             if worker is None:
-                return "Connect to master first"
+                return "❌ Connect to master first (Dashboard tab)."
             if not name.strip():
-                return "Enter a project name"
-            pid = worker.create_project(
-                {
-                    "name": name.strip(),
-                    "use_case": uc,
-                    "k": int(k),
-                    "r": int(r),
-                    "alpha": float(alpha),
-                    "step_size": float(step_size),
-                }
-            )
-            return f"Project created: `{pid}`"
+                return "❌ Enter a project name."
+
+            # Parse lists
+            feat_list = [x.strip() for x in keep_f.split(",") if x.strip()]
+            meta_list = [x.strip() for x in meta_c.split(",") if x.strip()]
+            centering_val = "mean" if cent == "mean" else None
+
+            config = {
+                "name": name.strip(),
+                "use_case": uc,
+                "k": int(k),
+                "r": int(r),
+                "bs_prop": float(bs_p),
+                "bs_times": int(bs_t),
+                "bs_replace": bs_r,
+                "alpha": float(alpha),
+                "step_size": float(step),
+                "var_thres": float(var_t),
+                "centering": centering_val,
+                "keep_feature_cols": feat_list if feat_list else None,
+                "meta_cols": meta_list if meta_list else None,
+            }
+            try:
+                pid = worker.create_project(config)
+                return f"✅ **Project created successfully!** ID: `{pid}`"
+            except Exception as e:
+                return f"❌ **Failed to create**: {e}"
 
         create_project_btn.click(
             fn=handle_create_project,
             inputs=[
                 worker_state,
-                project_name,
-                use_case,
-                k_input,
-                r_input,
-                alpha_input,
-                step_size_input,
+                p_name,
+                p_use_case,
+                p_k,
+                p_r,
+                p_bs_prop,
+                p_bs_times,
+                p_bs_replace,
+                p_alpha,
+                p_step_size,
+                p_var_thres,
+                p_centering,
+                p_keep_features,
+                p_meta_cols,
             ],
             outputs=[create_status],
         )
 
-        def handle_refresh(
-            worker: DCCoxWorker | None,
-        ) -> list[list[str]]:
+        def handle_refresh(worker: DCCoxWorker | None) -> list[list[str]]:
             if worker is None:
                 return []
-            projects = worker.list_projects()
-            return [
-                [
-                    p["id"],
-                    p["config"]["name"],
-                    p["status"],
-                    str(len(p["workers"])),
+            try:
+                projects = worker.list_projects()
+                return [
+                    [
+                        p["id"],
+                        p["config"]["name"],
+                        p["status"].upper(),
+                        str(len(p["workers"])),
+                        p["created_at"],
+                    ]
+                    for p in projects
                 ]
-                for p in projects
-            ]
+            except Exception:
+                return []
 
         refresh_btn.click(
-            fn=handle_refresh,
-            inputs=[worker_state],
-            outputs=[projects_table],
+            fn=handle_refresh, inputs=[worker_state], outputs=[projects_table]
+        )
+        history_refresh_btn.click(
+            fn=handle_refresh, inputs=[worker_state], outputs=[history_table]
         )
 
         def handle_join(
-            worker: DCCoxWorker | None,
-            pid: str,
-            cname: str,
-            dpath: str,
+            worker: DCCoxWorker | None, pid: str, cname: str, dpath: str
         ) -> tuple[str, str]:
             if worker is None:
-                return "", "Connect first"
+                return "", "❌ Connect first."
             if not pid.strip():
-                return "", "Enter project ID"
+                return "", "❌ Enter project ID."
             if not dpath.strip():
-                return "", "Enter data path to determine n_features"
+                return "", "❌ Enter data path to determine n_features."
 
-            # Determine n_features based on project config and local data
             try:
                 project = worker.get_project(pid.strip())
                 config = project["config"]
@@ -224,68 +366,112 @@ def create_ui() -> gr.Blocks:
                     tmp_df = pd.read_csv(dpath)
                     drop_cols = ["time", "event", *meta_cols]
                     n_features = len([c for c in tmp_df.columns if c not in drop_cols])
-            except Exception as e:
-                return "", f"Error computing n_features: {e}"
 
-            try:
                 wid = worker.join_project(pid.strip(), cname.strip(), n_features)
-                return pid.strip(), f"Joined as `{wid}` (n_features={n_features})"
+                return (
+                    pid.strip(),
+                    f"✅ Joined as `{wid}` (n_features={n_features}). Waiting for lock.",
+                )
             except Exception as e:
-                return "", f"Join failed: {e}"
+                return "", f"❌ Join failed: {e}"
 
         join_btn.click(
             fn=handle_join,
             inputs=[worker_state, join_project_id, worker_name_input, data_path],
-            outputs=[project_id_state, analysis_status],
+            outputs=[active_project_id, workspace_status],
+        )
+
+        def handle_lock(worker: DCCoxWorker | None, pid: str | None) -> str:
+            if worker is None or not pid:
+                return "❌ Join a project first."
+            try:
+                worker.lock_project(pid)
+                return "✅ Project locked! New workers can no longer join."
+            except Exception as e:
+                return f"❌ Lock failed: {e}"
+
+        lock_btn.click(
+            fn=handle_lock,
+            inputs=[worker_state, active_project_id],
+            outputs=[workspace_status],
         )
 
         def handle_start(worker: DCCoxWorker | None, pid: str | None) -> str:
-            if worker is None:
-                return "Connect first"
-            if not pid:
-                return "Join a project first"
+            if worker is None or not pid:
+                return "❌ Join a project first."
             try:
                 worker.start_project(pid)
-                return "Project started — Xanc generated"
+                return "✅ Analysis started! Xanc generated by server."
             except Exception as e:
-                return f"Start failed: {e}"
+                return f"❌ Start failed: {e}"
 
         start_btn.click(
             fn=handle_start,
-            inputs=[worker_state, project_id_state],
-            outputs=[analysis_status],
+            inputs=[worker_state, active_project_id],
+            outputs=[workspace_status],
         )
 
         def handle_run(
-            worker: DCCoxWorker | None,
-            pid: str | None,
-            dpath: str,
-        ) -> tuple[str, Any, Any]:
-            if worker is None:
-                return "Connect first", None, None
-            if not pid:
-                return "Join a project first", None, None
+            worker: DCCoxWorker | None, pid: str | None, dpath: str
+        ) -> tuple[str, Any]:
+            if worker is None or not pid:
+                return "❌ Join a project first.", None
             if not dpath.strip():
-                return "Enter data path", None, None
+                return "❌ Enter data path.", None
 
             try:
-                surv = worker.run_local_pipeline(pid, dpath.strip())
+                surv = worker.run_local_pipeline(pid, dpath.strip(), poll_interval=2.0)
                 summary_df = surv.summary
-                return (
-                    "Analysis completed",
-                    summary_df,
-                    surv.coef.to_dict(),
-                )
+                return "✅ Local compute & global aggregation completed!", summary_df
             except Exception as e:
-                return f"Analysis failed: {e}", None, None
+                return f"❌ Analysis failed: {e}", None
 
         run_btn.click(
             fn=handle_run,
-            inputs=[worker_state, project_id_state, data_path],
-            outputs=[analysis_status, summary_table, results_json],
+            inputs=[worker_state, active_project_id, data_path],
+            outputs=[workspace_status, summary_table],
         )
 
-    # In Gradio 6.0, theme and css shouldn't be in Blocks constructor for uvicorn mounting
+        def handle_poll_events(worker: DCCoxWorker | None, pid: str | None) -> str:
+            if worker is None or not pid:
+                return "Awaiting project connection..."
+            try:
+                events = worker.get_events(pid)
+                lines = [f"[{e['time'][:19]}] {e['message']}" for e in events]
+                return "\n".join(lines)
+            except Exception:
+                return "Polling events..."
+
+        def handle_fetch_history(
+            worker: DCCoxWorker | None, pid: str, wid: str
+        ) -> str | dict:
+            if worker is None:
+                return "❌ Connect to master first"
+            if not pid.strip() or not wid.strip():
+                return "❌ Project ID and Worker ID are required"
+            try:
+                resp = worker._http.get(
+                    f"/api/projects/{pid.strip()}/results/{wid.strip()}"
+                )
+                resp.raise_for_status()
+                return resp.json()
+            except Exception as e:
+                return {"error": str(e)}
+
+        fetch_history_btn.click(
+            fn=handle_fetch_history,
+            inputs=[worker_state, history_pid, history_wid],
+            outputs=[history_results],
+        )
+
+        # Poll the events every 2 seconds using gr.Timer
+        timer = gr.Timer(2)
+        timer.tick(
+            fn=handle_poll_events,
+            inputs=[worker_state, active_project_id],
+            outputs=[event_log_area],
+        )
+
     app.theme = theme
     app.css = custom_css
     return app
@@ -295,7 +481,6 @@ def create_app() -> FastAPI:
     """Create a FastAPI app to host the Gradio UI for uvicorn."""
     fastapi_app = FastAPI(title="DC-Cox Worker UI")
     gradio_app = create_ui()
-    # Using mount_gradio_app is standard for running Gradio through ASGI (Uvicorn)
     return gr.mount_gradio_app(fastapi_app, gradio_app, path="/")
 
 

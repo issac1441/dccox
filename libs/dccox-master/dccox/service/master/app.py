@@ -57,7 +57,7 @@ def create_app() -> FastAPI:
         return ProjectCreateResponse(
             id=project_id,
             name=config.name,
-            status=ProjectStatus.CREATED,
+            status=ProjectStatus.JOINING,
         )
 
     @app.get("/api/projects", response_model=list[ProjectDetail])
@@ -106,7 +106,7 @@ def create_app() -> FastAPI:
         project = store.get_project(project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        if project["status"] != ProjectStatus.CREATED:
+        if project["status"] != ProjectStatus.JOINING:
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot join project in '{project['status']}' status",
@@ -131,6 +131,22 @@ def create_app() -> FastAPI:
             total_workers=len(project["workers"]),
         )
 
+    # ── Pipeline: Lock ─────────────────────────────────────────────────
+
+    @app.post("/api/projects/{project_id}/lock")
+    async def lock_project(project_id: str) -> dict[str, str]:
+        """Lock the project to prevent more workers from joining."""
+        project = store.get_project(project_id)
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        try:
+            store.lock_project(project_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+        return {"status": "locked", "project_id": project_id}
+
     # ── Pipeline: Start ────────────────────────────────────────────────
 
     @app.post("/api/projects/{project_id}/start")
@@ -139,10 +155,10 @@ def create_app() -> FastAPI:
         project = store.get_project(project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        if project["status"] != ProjectStatus.CREATED:
+        if project["status"] != ProjectStatus.LOCKED:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot start project in '{project['status']}' status",
+                detail=f"Cannot start project in '{project['status']}' status. Must be locked first.",
             )
         if len(project["workers"]) == 0:
             raise HTTPException(
@@ -181,7 +197,7 @@ def create_app() -> FastAPI:
         project = store.get_project(project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        if project["status"] not in (ProjectStatus.STARTED, ProjectStatus.COMPLETED):
+        if project["status"] not in (ProjectStatus.COMPUTING, ProjectStatus.COMPLETED):
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot submit proxy in '{project['status']}' status",
@@ -235,6 +251,16 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail=f"No results for '{worker_id}'")
 
         return WorkerResultResponse(**results)
+
+    # ── Pipeline: Events ───────────────────────────────────────────────
+
+    @app.get("/api/projects/{project_id}/events")
+    async def get_events(project_id: str) -> list[dict[str, str]]:
+        """Get the event log for a project."""
+        project = store.get_project(project_id)
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return store.get_events(project_id)
 
     return app
 

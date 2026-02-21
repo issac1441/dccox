@@ -75,6 +75,18 @@ class DCCoxWorker:
         resp.raise_for_status()
         logger.info("Project %s started", project_id)
 
+    def lock_project(self, project_id: str) -> None:
+        """Lock the project on the master."""
+        resp = self._http.post(f"/api/projects/{project_id}/lock")
+        resp.raise_for_status()
+        logger.info("Project %s locked", project_id)
+
+    def get_events(self, project_id: str) -> list[dict[str, str]]:
+        """Fetch the event log from the master."""
+        resp = self._http.get(f"/api/projects/{project_id}/events")
+        resp.raise_for_status()
+        return resp.json()
+
     # ── Pipeline: local compute + submit ───────────────────────────────
 
     def run_local_pipeline(
