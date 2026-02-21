@@ -240,14 +240,11 @@ def create_ui() -> gr.Blocks:
                     interactive=False,
                 )
                 with gr.Row():
-                    history_pid = gr.Textbox(label="Project ID")
-                    history_wid = gr.Dropdown(
-                        label="Select Worker ID",
-                        choices=[],
-                        allow_custom_value=True,
-                        info="Click a project in the table to populate",
+                    history_pid = gr.Textbox(
+                        label="Project ID",
+                        info="Select a project above to populate automatically",
                     )
-                    fetch_history_btn = gr.Button("Fetch Results")
+                    fetch_history_btn = gr.Button("Fetch My Results")
 
                 history_results = gr.JSON(label="Full Results")
 
@@ -473,47 +470,33 @@ def create_ui() -> gr.Blocks:
             except Exception:
                 return "Polling events..."
 
-        def handle_fetch_history(
-            worker: DCCoxWorker | None, pid: str, wid: str
-        ) -> str | dict:
+        def handle_fetch_history(worker: DCCoxWorker | None, pid: str) -> str | dict:
             if worker is None:
                 return "❌ Connect to master first"
-            if not pid.strip() or not wid.strip():
-                return "❌ Project ID and Worker ID are required"
+            if worker.worker_id is None:
+                return "❌ Join a project first to fetch your results"
+            if not pid.strip():
+                return "❌ Project ID is required"
             try:
-                return worker.get_worker_results(pid.strip(), wid.strip())
+                return worker.get_worker_results(pid.strip(), worker.worker_id)
             except Exception as e:
                 return {"error": str(e)}
 
         fetch_history_btn.click(
             fn=handle_fetch_history,
-            inputs=[worker_state, history_pid, history_wid],
+            inputs=[worker_state, history_pid],
             outputs=[history_results],
         )
 
-        def on_select_history(
-            worker: DCCoxWorker | None, evt: gr.SelectData
-        ) -> tuple[str, Any]:
+        def on_select_history(evt: gr.SelectData) -> str:
             # Table headers: ["Project ID", "Project Name", "Status", "Workers Count", "Created At"]
             # ID is at index 0 (evt.value)
-            pid = str(evt.value or "")
-            if worker is None or not pid:
-                return pid, gr.Dropdown(choices=[])
-
-            try:
-                project = worker.get_project(pid)
-                # worker["workers"] is a list of WorkerInfo
-                choices = [w["worker_id"] for w in project["workers"]]
-                return pid, gr.Dropdown(
-                    choices=choices, value=choices[0] if choices else None
-                )
-            except Exception:
-                return pid, gr.Dropdown(choices=[])
+            return str(evt.value or "")
 
         history_table.select(
             fn=on_select_history,
-            inputs=[worker_state],
-            outputs=[history_pid, history_wid],
+            inputs=[],
+            outputs=[history_pid],
         )
 
         # Poll the events every 2 seconds using gr.Timer

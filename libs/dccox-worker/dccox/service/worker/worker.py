@@ -32,6 +32,11 @@ class DCCoxWorker:
         self._uc = Horizontal()
         self._worker_id: str | None = None
 
+    @property
+    def worker_id(self) -> str | None:
+        """Return the worker ID assigned after joining a project."""
+        return self._worker_id
+
     # ── Project Management ─────────────────────────────────────────────
 
     def create_project(self, config: dict) -> str:
