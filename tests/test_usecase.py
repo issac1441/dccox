@@ -60,7 +60,7 @@ class CoxPHRegressionTestCase(unittest.TestCase):
             X_ = cls.data.iloc[i * chunk_size : (i + 1) * chunk_size, 2:]
             y_ = cls.data.iloc[i * chunk_size : (i + 1) * chunk_size, 0:2]
             data_ = pd.concat([X_, y_], axis=1)
-            filepath = f"{cls.test_dir}/client{i + 1}.clinical"
+            filepath = f"{cls.test_dir}/worker{i + 1}.clinical"
             data_.to_csv(filepath, index=None)
             cls.file_paths.append(filepath)
 

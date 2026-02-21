@@ -43,7 +43,7 @@ def _run_distributed(
 
     Returns the fitted Regressor and the list of projection matrices Fs[c][d].
     """
-    n_clients = len(sample_splits)
+    n_workers = len(sample_splits)
     n_feat_blocks = len(feature_splits)
 
     # Split samples
@@ -58,7 +58,7 @@ def _run_distributed(
     Xancs_tilde_blocks: list[list[np.ndarray]] = []
     Fs: list[list[np.ndarray]] = []
 
-    for c in range(n_clients):
+    for c in range(n_workers):
         Xc = X[sample_idxs[c] : sample_idxs[c + 1], :]
         dur_c = durations[sample_idxs[c] : sample_idxs[c + 1]]
         evt_c = events[sample_idxs[c] : sample_idxs[c + 1]]
@@ -109,13 +109,13 @@ def _recover_coef(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Recover original-space coefficients from the fitted distributed model.
 
-    Uses client 0 for recovery (any client should give the same result).
+    Uses worker 0 for recovery (any worker should give the same result).
     """
     Gs = model.Gs
     coef_hat = model.coef
     coef_var_hat = model.coef_var
 
-    # Recover coef_tilde per block for client 0
+    # Recover coef_tilde per block for worker 0
     coef_tilde_parts = []
     coef_var_tilde_parts = []
     for d in range(Gs.shape[1]):
@@ -194,42 +194,42 @@ class DistributedRegressorTestCase(unittest.TestCase):
         )
 
     def test_regressor_1x1(self) -> None:
-        """Test 1 client, 1 feature block (baseline)."""
+        """Test 1 worker, 1 feature block (baseline)."""
         self._assert_coef_close(
             sample_splits=[360],
             feature_splits=[7],
         )
 
     def test_regressor_3x1(self) -> None:
-        """Test 3 clients, 1 feature block."""
+        """Test 3 workers, 1 feature block."""
         self._assert_coef_close(
             sample_splits=[100, 120, 140],
             feature_splits=[7],
         )
 
     def test_regressor_1x3(self) -> None:
-        """Test 1 client, 3 feature blocks."""
+        """Test 1 worker, 3 feature blocks."""
         self._assert_coef_close(
             sample_splits=[360],
             feature_splits=[3, 2, 2],
         )
 
     def test_regressor_3x3(self) -> None:
-        """Test 3 clients, 3 feature blocks (full distributed)."""
+        """Test 3 workers, 3 feature blocks (full distributed)."""
         self._assert_coef_close(
             sample_splits=[100, 120, 140],
             feature_splits=[3, 2, 2],
         )
 
     def test_regressor_2x4(self) -> None:
-        """Test 2 clients, 4 feature blocks."""
+        """Test 2 workers, 4 feature blocks."""
         self._assert_coef_close(
             sample_splits=[180, 180],
             feature_splits=[2, 2, 2, 1],
         )
 
     def test_regressor_4x2(self) -> None:
-        """Test 4 clients, 2 feature blocks."""
+        """Test 4 workers, 2 feature blocks."""
         self._assert_coef_close(
             sample_splits=[80, 100, 90, 90],
             feature_splits=[4, 3],
