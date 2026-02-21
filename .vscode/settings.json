@@ -11,5 +11,9 @@
     "files.exclude": {
         "**/__pycache__/": true
     },
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python"
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "mypy-type-checker.importStrategy": "fromEnvironment",
+    "mypy-type-checker.path": ["${workspaceFolder}/.venv/bin/mypy"],
+    "mypy-type-checker.preferDaemon": true,
+    "mypy-type-checker.showNotifications": "onError"
 }
