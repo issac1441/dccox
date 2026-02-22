@@ -46,11 +46,11 @@ class ProjectSchema(BaseModel):
         description="Centering strategy: None (paper) or 'mean' (lifelines)",
     )
     keep_feature_cols: list[str] | None = Field(
-        default=["MYCN", "ALK", "TP53", "PHOX2B"],
+        default=None,
         description="Feature columns to use (auto-detect if None)",
     )
     meta_cols: list[str] | None = Field(
-        default=["sample-id"],
+        default=None,
         description="Metadata columns to preserve",
     )
 
