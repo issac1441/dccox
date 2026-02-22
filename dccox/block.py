@@ -21,7 +21,7 @@ class BlockMatrix:
         The list stores the lists of arrays
     axis : int
         The axis along which blocks are concatenated or unequal in size.
-        - axis=1: Blocks in a row (same client) are concatenated along columns (feature blocks).
+        - axis=1: Blocks in a row (same worker) are concatenated along columns (feature blocks).
           e.g., shapes in Ms[0]: [(3,10), (3,2), (3,4)].
         - axis=0: Blocks in a column (same dimension) are concatenated along rows (sample blocks).
           e.g., shapes in Ms[:,0]: [(10,3), (2,3), (4,2)].
@@ -38,7 +38,7 @@ class BlockMatrix:
             The list stores the lists of arrays
         axis : int
             The axis along which blocks are concatenated or unequal in size.
-            - axis=1: Blocks in a row (same client) are concatenated along columns (feature blocks).
+            - axis=1: Blocks in a row (same worker) are concatenated along columns (feature blocks).
               e.g., shapes in Ms[0]: [(3,10), (3,2), (3,4)].
             - axis=0: Blocks in a column (same dimension) are concatenated along rows (sample blocks).
               e.g., shapes in Ms[:,0]: [(10,3), (2,3), (4,2)].
@@ -59,7 +59,7 @@ class BlockMatrix:
         Returns
         -------
             shape : tuple of int
-                The shape of the block matrix, (number of clients, number of dimensions).
+                The shape of the block matrix, (number of workers, number of dimensions).
         """
         return (self.__nc, self.__nd)
 
@@ -113,7 +113,9 @@ class BlockMatrix:
         else:
             raise TypeError(f"Unsupported index type: {type(idx).__name__}")
 
-    def __getitem__(self, indices: slice | int | list | tuple) -> Array2D:
+    def __getitem__(
+        self, indices: slice | int | list[int] | tuple[int, ...]
+    ) -> Array2D:
         """
         Get the block matrix.
 

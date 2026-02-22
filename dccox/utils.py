@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import logging
-from typing import Self, get_type_hints
+from typing import Any, Self, get_type_hints
 
 from pydantic import ConfigDict, validate_call
 
 from dccox.config import env
 
 
-def _returns_self(method: callable) -> bool:
+def _returns_self(method: Callable[[Any], Any]) -> bool:
     """Check if a method's return annotation contains Self."""
     try:
         hints = get_type_hints(method)

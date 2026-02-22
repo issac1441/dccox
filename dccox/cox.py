@@ -30,7 +30,7 @@ class Projector:
         The latent dimension of Fdr. Notice that the ultimate dimension is min(k, len(S)),
         where the S is the number of nonzero singular values.
     bs_prop : float
-        The proportion of the samples in a client used for bootstrapping for each time.
+        The proportion of the samples in a worker used for bootstrapping for each time.
     bs_times : int
         The number of times to bootstrap.
     fitter_params : dict
@@ -58,7 +58,7 @@ class Projector:
             The latent dimension of Fdr. Notice that the ultimate dimension is min(k, len(S)),
             where the S is the number of nonzero singular values.
         bs_prop : float
-            The proportion of the samples in a client used for bootstrapping for each time.
+            The proportion of the samples in a worker used for bootstrapping for each time.
         bs_times : int
             The number of times to bootstrap.
         bs_replace : bool
@@ -368,7 +368,7 @@ class Regressor:
         for c in range(Xancs_tilde.shape[0]):
             # Gc: m tilde x m hat
             Gc = np.linalg.pinv(Xancs_tilde[c, :]) @ P
-            # Use client c's dsizes, not blocks[0]'s
+            # Use worker c's dsizes, not blocks[0]'s
             dsizes_c = [
                 Xancs_tilde.blocks[c][d].shape[1] for d in range(Xancs_tilde.shape[1])
             ]
@@ -537,6 +537,8 @@ class SurvivalFunction:
             # centering="mean": use baseline hazard as-is (at mean)
             self.__baseline_hazard = baseline_hazard
 
+        self.__baseline_hazard = self._ensure_numeric_index(self.__baseline_hazard)
+
     @property
     def baseline_cumhazards(self) -> pd.DataFrame:
         r"""
@@ -580,6 +582,18 @@ class SurvivalFunction:
             h_0\\left(t\right)
         """
         return self.__baseline_hazard
+
+    @staticmethod
+    def _ensure_numeric_index(df: pd.DataFrame) -> pd.DataFrame:
+        if np.issubdtype(df.index.dtype, np.number):
+            return df
+        try:
+            numeric_index = pd.to_numeric(df.index)
+        except Exception:
+            numeric_index = pd.RangeIndex(start=0, stop=len(df), step=1)
+        df_copy = df.copy()
+        df_copy.index = numeric_index
+        return df_copy
 
     @property
     def coef(self) -> pd.DataFrame:

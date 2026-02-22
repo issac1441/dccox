@@ -53,7 +53,7 @@ class TestBlockMatrix:
         assert blk.shape == (1, 1)
 
     def test_csizes(self, blocks_axis1: list[list[np.ndarray]]) -> None:
-        """Test csizes property (number of rows per client)."""
+        """Test csizes property (number of rows per worker)."""
         blk = BlockMatrix(blocks_axis1)
         assert blk.csizes == [2, 3]
 

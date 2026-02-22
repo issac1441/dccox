@@ -49,6 +49,19 @@ docs = [
     "pydata-sphinx-theme>=0.16.1",
 ]
 
+[tool.uv.sources]
+dccox = { workspace = true }
+dccox-master = { workspace = true }
+dccox-worker = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.10.4,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+module-name = "dccox"
+
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
@@ -104,6 +117,9 @@ docstring-code-line-length = "dynamic"
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
+[tool.uv.workspace]
+members = ["libs/*"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["dccox"]
 combine-as-imports = true
@@ -112,6 +128,7 @@ split-on-trailing-comma = true
 force-sort-within-sections = true
 
 [tool.mypy]
+python_version = "3.11"
 plugins = ["pydantic.mypy"]
 disable_error_code = ["import-untyped"]
 strict = true

@@ -154,7 +154,7 @@ class Horizontal:
             The latent dimension of Fdr. Notice that the ultimate dimension is min(k, len(S)),
             where the S is the number of nonzero singular values.
         bs_prop : float
-            The proportion of the samples in a client used for bootstrapping for each time.
+            The proportion of the samples in a worker used for bootstrapping for each time.
         bs_times : int
             The number of times to bootstrap.
         bs_replace : bool
@@ -294,7 +294,7 @@ class Horizontal:
         Xancs_tilde = BlockMatrix([Xancs_tilde[idx] for idx in keep_idx])
         ys = np.concatenate([ys[idx] for idx in keep_idx])
 
-        # Keep numerator/denominator consistent with filtered clients.
+        # Keep numerator/denominator consistent with filtered workers.
         kept_sums = [sums[idx] for idx in keep_idx]
         feature_mean = np.sum(kept_sums, axis=0) / ys.shape[0]
 
