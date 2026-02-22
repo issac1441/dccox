@@ -6,35 +6,37 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
-
-# Install dependencies
-RUN uv sync --frozen --no-install-project
-
-# Copy the rest of the application
+# Copy project
 COPY . .
 
-# Install the project itself
-RUN uv sync --frozen
+# Install worker's dependencies
+RUN uv sync --frozen --package dccox-worker --package dccox-master
 
-# Final stage
+# -------------------------------------------------------
+
+# Main stage
 FROM python:3.11-slim-bookworm
+
+# Copy uv and virtual environment
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+ENV DCCOX_WORKER_PORT=8001
+ENV DCCOX_MASTER_URL=http://localhost:8000
+ENV DCCOX_WORKER_NAME=my-worker
 
 WORKDIR /app
 
-# Copy the virtual environment from the builder stage
-COPY --from=builder /app/.venv /app/.venv
-
 # Copy application code
-COPY . /app
+COPY libs/dccox-worker/ /app/libs/dccox-worker/
+COPY libs/dccox-master/ /app/libs/dccox-master/
+COPY dccox/ /app/dccox/
 
 # Add virtual environment to PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Expose the worker port (default 8001)
-# Can be overridden by DCCOX_WORKER_PORT
-EXPOSE 8001
+EXPOSE $DCCOX_WORKER_PORT
 
 # Run the application
-CMD ["python", "-m", "dccox.service.worker.ui"]
+CMD ["uv", "run", "python", "-m", "dccox.service.worker.ui"]
