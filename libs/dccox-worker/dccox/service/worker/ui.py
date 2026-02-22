@@ -11,7 +11,7 @@ import pandas as pd
 
 from dccox.service.master.schemas import ProjectSchema
 from dccox.service.worker.config import settings
-from dccox.service.worker.worker import DCCoxWorker
+from dccox.service.worker.worker import DCCoxWorker, _format_summary
 
 logger = logging.getLogger(__name__)
 
@@ -246,7 +246,10 @@ def create_ui() -> gr.Blocks:
                     )
                     fetch_history_btn = gr.Button("Fetch My Results")
 
-                history_results = gr.JSON(label="Full Results")
+                history_status = gr.Markdown("")
+                history_results = gr.Dataframe(
+                    label="History: Coefficients Summary", interactive=False
+                )
 
         # ── Event Handlers ─────────────────────────────────────────────
 
@@ -424,15 +427,6 @@ def create_ui() -> gr.Blocks:
             outputs=[workspace_status],
         )
 
-        def _format_feature(value: pd.Index | tuple[str] | list[str]) -> str:
-            if isinstance(value, pd.Index):
-                parts = value.tolist()
-            elif isinstance(value, (tuple, list)):
-                parts = value
-            else:
-                return str(value)
-            return " + ".join(str(part) for part in parts)
-
         def handle_run(
             worker: DCCoxWorker | None, pid: str | None, dpath: str
         ) -> tuple[str, Any]:
@@ -443,14 +437,8 @@ def create_ui() -> gr.Blocks:
 
             try:
                 surv = worker.run_local_pipeline(pid, dpath.strip(), poll_interval=2.0)
-                summary_df = surv.summary
-                if isinstance(summary_df, pd.DataFrame) and not summary_df.empty:
-                    summary_df = summary_df.reset_index()
-                    summary_df.rename(
-                        columns={summary_df.columns[0]: "feature"}, inplace=True
-                    )
-                    summary_df["feature"] = summary_df["feature"].apply(_format_feature)
-                return "✅ Local compute & global aggregation completed!", summary_df
+                summary = _format_summary(surv.summary)
+                return "✅ Local compute & global aggregation completed!", summary
             except Exception as e:
                 return f"❌ Analysis failed: {e}", None
 
@@ -470,22 +458,28 @@ def create_ui() -> gr.Blocks:
             except Exception:
                 return "Polling events..."
 
-        def handle_fetch_history(worker: DCCoxWorker | None, pid: str) -> str | dict:
+        def handle_fetch_history(
+            worker: DCCoxWorker | None, pid: str
+        ) -> tuple[str, Any]:
             if worker is None:
-                return "❌ Connect to master first"
+                return "❌ Connect to master first", None
             if worker.worker_id is None:
-                return "❌ Join a project first to fetch your results"
+                return "❌ Join a project first to fetch your results", None
             if not pid.strip():
-                return "❌ Project ID is required"
+                return "❌ Project ID is required", None
             try:
-                return worker.get_worker_results(pid.strip(), worker.worker_id)
+                results = worker.get_worker_results(pid.strip())
+                if isinstance(results, dict) and "error" in results:
+                    return f"❌ {results['error']}", None
+                summary = results if isinstance(results, pd.DataFrame) else None
+                return "✅ Loaded stored results.", summary
             except Exception as e:
-                return {"error": str(e)}
+                return f"❌ Fetch failed: {e}", None
 
         fetch_history_btn.click(
             fn=handle_fetch_history,
             inputs=[worker_state, history_pid],
-            outputs=[history_results],
+            outputs=[history_status, history_results],
         )
 
         def on_select_history(evt: gr.SelectData) -> str:

@@ -30,6 +30,7 @@ class DCCoxWorker:
         self.master_url = master_url.rstrip("/")
         self._http = httpx.Client(base_url=self.master_url, timeout=120)
         self._uc = Horizontal()
+        self._results: dict[str, SurvivalFunction] = {}
         self._worker_id: str | None = None
 
     @property
@@ -178,7 +179,7 @@ class DCCoxWorker:
         baseline_hazard = pd.DataFrame(results["baseline_hazard"])
         feature_mean = np.array(results["feature_mean"])
 
-        surv_func = self._uc.local_recover_survival(
+        surv_func: SurvivalFunction = self._uc.local_recover_survival(
             keep_feature_cols,
             coef,
             coef_var,
@@ -189,6 +190,8 @@ class DCCoxWorker:
             centering=config.get("centering"),
         )
         logger.info("Survival function recovered")
+        self._results[project_id] = surv_func
+        logger.info("Results stored for project %s", project_id)
         return surv_func
 
     # ── Polling helpers ────────────────────────────────────────────────
@@ -213,12 +216,33 @@ class DCCoxWorker:
             logger.debug("Waiting for global results...")
             time.sleep(interval)
 
-    def get_worker_results(self, project_id: str, worker_id: str) -> dict:
+    def get_worker_results(self, project_id: str) -> dict[str, str] | pd.DataFrame:
         """Fetch global results for a specific worker from the master."""
-        resp = self._http.get(f"/api/projects/{project_id}/results/{worker_id}")
-        resp.raise_for_status()
-        return resp.json()
+        surv = self._results.get(project_id)
+        if surv is None:
+            return {"error": f"No results found for project {project_id}"}
+        summary_ = surv.summary
+        if isinstance(summary_, pd.DataFrame) and not summary_.empty:
+            return _format_summary(summary_)
+        return summary_
 
     def close(self) -> None:
         """Close the HTTP session."""
         self._http.close()
+
+
+def _format_summary(summary: pd.DataFrame) -> pd.DataFrame:
+    summary = summary.reset_index()
+    summary.rename(columns={summary.columns[0]: "feature"}, inplace=True)
+    summary["feature"] = summary["feature"].apply(_format_feature)
+    return summary
+
+
+def _format_feature(value: pd.Index | tuple[str] | list[str]) -> str:
+    if isinstance(value, pd.Index):
+        parts = value.tolist()
+    elif isinstance(value, (tuple, list)):
+        parts = value
+    else:
+        return str(value)
+    return " + ".join(str(part) for part in parts)
