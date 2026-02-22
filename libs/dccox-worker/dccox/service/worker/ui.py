@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import tempfile
 from typing import Any
 
 from fastapi import FastAPI
@@ -314,6 +315,7 @@ def create_ui() -> gr.Blocks:
                     interactive=False,
                     type="pandas",
                 )
+                summary_download = gr.DownloadButton("Download Summary CSV")
 
                 with gr.Accordion("Baseline Details", open=False):
                     baseline_cumhazards_table = gr.Dataframe(
@@ -321,15 +323,24 @@ def create_ui() -> gr.Blocks:
                         interactive=False,
                         type="pandas",
                     )
+                    baseline_cumhazards_download = gr.DownloadButton(
+                        "Download Baseline Cumulative Hazards CSV"
+                    )
                     baseline_survival_table = gr.Dataframe(
                         label="Baseline Survival",
                         interactive=False,
                         type="pandas",
                     )
+                    baseline_survival_download = gr.DownloadButton(
+                        "Download Baseline Survival CSV"
+                    )
                     baseline_hazard_table = gr.Dataframe(
                         label="Baseline Hazard",
                         interactive=False,
                         type="pandas",
+                    )
+                    baseline_hazard_download = gr.DownloadButton(
+                        "Download Baseline Hazard CSV"
                     )
 
                 with gr.Accordion("Prediction Sandbox", open=False):
@@ -348,7 +359,7 @@ def create_ui() -> gr.Blocks:
                         datatype="number",
                         type="pandas",
                         row_count=1,
-                        col_count=(0, "dynamic"),
+                        column_count=(0, "dynamic"),
                     )
                     run_prediction_btn = gr.Button(
                         "Run Prediction", variant="secondary"
@@ -384,6 +395,9 @@ def create_ui() -> gr.Blocks:
                     interactive=False,
                     type="pandas",
                 )
+                history_summary_download = gr.DownloadButton(
+                    "Download History Summary CSV"
+                )
 
                 with gr.Accordion("History Baseline Details", open=False):
                     history_baseline_cumhazards_table = gr.Dataframe(
@@ -391,15 +405,24 @@ def create_ui() -> gr.Blocks:
                         interactive=False,
                         type="pandas",
                     )
+                    history_baseline_cumhazards_download = gr.DownloadButton(
+                        "Download History Baseline Cumulative Hazards CSV"
+                    )
                     history_baseline_survival_table = gr.Dataframe(
                         label="Baseline Survival",
                         interactive=False,
                         type="pandas",
                     )
+                    history_baseline_survival_download = gr.DownloadButton(
+                        "Download History Baseline Survival CSV"
+                    )
                     history_baseline_hazard_table = gr.Dataframe(
                         label="Baseline Hazard",
                         interactive=False,
                         type="pandas",
+                    )
+                    history_baseline_hazard_download = gr.DownloadButton(
+                        "Download History Baseline Hazard CSV"
                     )
 
                 with gr.Accordion("History Prediction Sandbox", open=False):
@@ -418,7 +441,7 @@ def create_ui() -> gr.Blocks:
                         datatype="number",
                         type="pandas",
                         row_count=1,
-                        col_count=(0, "dynamic"),
+                        column_count=(0, "dynamic"),
                     )
                     history_run_prediction_btn = gr.Button(
                         "Run Prediction", variant="secondary"
@@ -467,6 +490,68 @@ def create_ui() -> gr.Blocks:
             if arr.ndim == 1:
                 return pd.DataFrame({method: arr})
             return pd.DataFrame(arr)
+
+        def _create_temp_csv(content: str, prefix: str) -> str:
+            safe_prefix = (prefix or "export").replace(" ", "_")
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=".csv",
+                prefix=f"{safe_prefix}_",
+                mode="w",
+                encoding="utf-8",
+            ) as tmp:
+                tmp.write(content)
+                return tmp.name
+
+        def _download_table_csv(
+            worker: DCCoxWorker | None, pid: str | None, table_key: str
+        ) -> str:
+            if worker is None:
+                raise gr.Error("Connect to master first.")
+            if not pid:
+                raise gr.Error("Run analysis or load results first.")
+            pid_clean = pid.strip()
+            if not pid_clean:
+                raise gr.Error("Run analysis or load results first.")
+            tables = worker.get_result_tables(pid_clean)
+            if isinstance(tables, dict) and "error" in tables:
+                raise gr.Error(tables["error"])
+            table = tables.get(table_key)
+            if not isinstance(table, pd.DataFrame):
+                raise gr.Error("Table unavailable. Run analysis first.")
+            return _create_temp_csv(table.to_csv(index=False), table_key)
+
+        def _compute_prediction_output(
+            worker: DCCoxWorker | None,
+            result_pid: str | None,
+            method: str,
+            t_value: float | None,
+            feature_headers: list[str],
+            feature_values: pd.DataFrame | None,
+        ) -> pd.DataFrame:
+            if worker is None:
+                raise ValueError("Connect to master first.")
+            if result_pid is None:
+                raise ValueError("Run analysis or load results first.")
+            surv = worker.get_survival_function(result_pid)
+            if surv is None:
+                raise ValueError(f"No cached results for project {result_pid}")
+            cfg = PREDICTION_METHOD_CONFIG.get(method)
+            if cfg is None:
+                raise ValueError(f"Unknown method '{method}'")
+
+            args: list[Any] = []
+            if cfg["requires_time"]:
+                if t_value is None:
+                    raise ValueError("Provide a time value for this method.")
+                args.append(float(t_value))
+            if cfg["requires_features"]:
+                names = feature_headers or worker.get_feature_names(result_pid) or []
+                X = _prepare_feature_df(feature_values, names)
+                args.append(X)
+
+            prediction = getattr(surv, method)(*args)
+            return _format_prediction_output(prediction, method)
 
         def handle_connect(url: str) -> tuple[Any, str]:
             try:
@@ -741,34 +826,13 @@ def create_ui() -> gr.Blocks:
             feature_headers: list[str],
             feature_values: pd.DataFrame | None,
         ) -> tuple[str, Any]:
-            if worker is None:
-                return "❌ Connect to master first.", None
-            if result_pid is None:
-                return "❌ Run analysis or load results first.", None
-            surv = worker.get_survival_function(result_pid)
-            if surv is None:
-                return f"❌ No cached results for project {result_pid}", None
-            cfg = PREDICTION_METHOD_CONFIG.get(method)
-            if cfg is None:
-                return f"❌ Unknown method '{method}'", None
-
-            args: list[Any] = []
-            if cfg["requires_time"]:
-                if t_value is None:
-                    return "❌ Provide a time value for this method.", None
-                args.append(float(t_value))
-            if cfg["requires_features"]:
-                names = feature_headers or worker.get_feature_names(result_pid) or []
-                try:
-                    X = _prepare_feature_df(feature_values, names)
-                except ValueError as err:
-                    return f"❌ {err}", None
-                args.append(X)
-
             try:
-                prediction = getattr(surv, method)(*args)
-                formatted = _format_prediction_output(prediction, method)
+                formatted = _compute_prediction_output(
+                    worker, result_pid, method, t_value, feature_headers, feature_values
+                )
                 return f"✅ {method} computed.", formatted
+            except ValueError as err:
+                return f"❌ {err}", None
             except Exception as err:
                 return f"❌ Prediction failed: {err}", None
 
@@ -796,6 +860,104 @@ def create_ui() -> gr.Blocks:
                 history_prediction_input,
             ],
             outputs=[history_prediction_status, history_prediction_output],
+        )
+
+        summary_download.click(
+            fn=lambda worker, pid: _download_table_csv(worker, pid, "summary"),
+            inputs=[worker_state, results_project_id],
+            outputs=[summary_download],
+        )
+        baseline_cumhazards_download.click(
+            fn=lambda worker, pid: _download_table_csv(
+                worker, pid, "baseline_cumhazards"
+            ),
+            inputs=[worker_state, results_project_id],
+            outputs=[baseline_cumhazards_download],
+        )
+        baseline_survival_download.click(
+            fn=lambda worker, pid: _download_table_csv(
+                worker, pid, "baseline_survival"
+            ),
+            inputs=[worker_state, results_project_id],
+            outputs=[baseline_survival_download],
+        )
+        baseline_hazard_download.click(
+            fn=lambda worker, pid: _download_table_csv(worker, pid, "baseline_hazard"),
+            inputs=[worker_state, results_project_id],
+            outputs=[baseline_hazard_download],
+        )
+        history_summary_download.click(
+            fn=lambda worker, pid: _download_table_csv(worker, pid, "summary"),
+            inputs=[worker_state, results_project_id],
+            outputs=[history_summary_download],
+        )
+        history_baseline_cumhazards_download.click(
+            fn=lambda worker, pid: _download_table_csv(
+                worker, pid, "baseline_cumhazards"
+            ),
+            inputs=[worker_state, results_project_id],
+            outputs=[history_baseline_cumhazards_download],
+        )
+        history_baseline_survival_download.click(
+            fn=lambda worker, pid: _download_table_csv(
+                worker, pid, "baseline_survival"
+            ),
+            inputs=[worker_state, results_project_id],
+            outputs=[history_baseline_survival_download],
+        )
+        history_baseline_hazard_download.click(
+            fn=lambda worker, pid: _download_table_csv(worker, pid, "baseline_hazard"),
+            inputs=[worker_state, results_project_id],
+            outputs=[history_baseline_hazard_download],
+        )
+
+        summary_download.click(
+            fn=lambda worker, pid: _download_table_csv(worker, pid, "summary"),
+            inputs=[worker_state, results_project_id],
+            outputs=[summary_download],
+        )
+        baseline_cumhazards_download.click(
+            fn=lambda worker, pid: _download_table_csv(
+                worker, pid, "baseline_cumhazards"
+            ),
+            inputs=[worker_state, results_project_id],
+            outputs=[baseline_cumhazards_download],
+        )
+        baseline_survival_download.click(
+            fn=lambda worker, pid: _download_table_csv(
+                worker, pid, "baseline_survival"
+            ),
+            inputs=[worker_state, results_project_id],
+            outputs=[baseline_survival_download],
+        )
+        baseline_hazard_download.click(
+            fn=lambda worker, pid: _download_table_csv(worker, pid, "baseline_hazard"),
+            inputs=[worker_state, results_project_id],
+            outputs=[baseline_hazard_download],
+        )
+        history_summary_download.click(
+            fn=lambda worker, pid: _download_table_csv(worker, pid, "summary"),
+            inputs=[worker_state, results_project_id],
+            outputs=[history_summary_download],
+        )
+        history_baseline_cumhazards_download.click(
+            fn=lambda worker, pid: _download_table_csv(
+                worker, pid, "baseline_cumhazards"
+            ),
+            inputs=[worker_state, results_project_id],
+            outputs=[history_baseline_cumhazards_download],
+        )
+        history_baseline_survival_download.click(
+            fn=lambda worker, pid: _download_table_csv(
+                worker, pid, "baseline_survival"
+            ),
+            inputs=[worker_state, results_project_id],
+            outputs=[history_baseline_survival_download],
+        )
+        history_baseline_hazard_download.click(
+            fn=lambda worker, pid: _download_table_csv(worker, pid, "baseline_hazard"),
+            inputs=[worker_state, results_project_id],
+            outputs=[history_baseline_hazard_download],
         )
 
         def handle_poll_events(worker: DCCoxWorker | None, pid: str | None) -> str:
