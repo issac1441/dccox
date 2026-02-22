@@ -126,9 +126,11 @@ def create_app() -> FastAPI:
             worker_id,
             body.n_features,
         )
+        updated_project = store.get_project(project_id)
+        total_workers = len(updated_project["workers"]) if updated_project else 0
         return WorkerJoinResponse(
             worker_id=worker_id,
-            total_workers=len(project["workers"]),
+            total_workers=total_workers,
         )
 
     # ── Pipeline: Lock ─────────────────────────────────────────────────
@@ -219,9 +221,7 @@ def create_app() -> FastAPI:
                 body.feature_sum,
             )
         except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Processing failed: {e}"
-            ) from e
+            raise HTTPException(status_code=500, detail="Processing failed") from e
 
         return {
             "status": "submitted",

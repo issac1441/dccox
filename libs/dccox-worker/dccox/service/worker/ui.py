@@ -264,13 +264,13 @@ def create_ui() -> gr.Blocks:
                         info=fields["centering"].description,
                     )
                     p_keep_features = gr.Textbox(
-                        value=",".join(fields["keep_feature_cols"].default),
+                        value=",".join(fields["keep_feature_cols"].default or []),
                         label="keep_feature_cols",
                         info=fields["keep_feature_cols"].description
                         + " (comma separated)",
                     )
                     p_meta_cols = gr.Textbox(
-                        value=",".join(fields["meta_cols"].default),
+                        value=",".join(fields["meta_cols"].default or []),
                         label="meta_cols",
                         info=fields["meta_cols"].description + " (comma separated)",
                     )
@@ -499,6 +499,56 @@ def create_ui() -> gr.Blocks:
                 return pd.DataFrame({method: arr})
             return pd.DataFrame(arr)
 
+        def _workspace_empty_outputs(
+            message: str, pid: str | None, headers: list[str]
+        ) -> tuple[Any, ...]:
+            return (
+                message,
+                None,
+                None,
+                None,
+                None,
+                pid,
+                headers,
+                None,
+                "",
+                None,
+                None,
+                None,
+                None,
+                None,
+                "",
+                None,
+                None,
+                None,
+            )
+
+        def _history_empty_outputs(
+            message: str, pid: str | None, headers: list[str]
+        ) -> tuple[Any, ...]:
+            return (
+                message,
+                None,
+                message,
+                None,
+                None,
+                None,
+                None,
+                pid,
+                headers,
+                None,
+                "",
+                None,
+                None,
+                None,
+                None,
+                None,
+                "",
+                None,
+                None,
+                None,
+            )
+
         def _create_temp_file(
             data: str | bytes, *, prefix: str, suffix: str, binary: bool = False
         ) -> str:
@@ -575,18 +625,6 @@ def create_ui() -> gr.Blocks:
             ax.legend()
             fig.tight_layout()
             return fig
-
-        def _create_temp_csv(content: str, prefix: str) -> str:
-            safe_prefix = (prefix or "export").replace(" ", "_")
-            with tempfile.NamedTemporaryFile(
-                delete=False,
-                suffix=".csv",
-                prefix=f"{safe_prefix}_",
-                mode="w",
-                encoding="utf-8",
-            ) as tmp:
-                tmp.write(content)
-                return tmp.name
 
         def _download_table_csv(
             worker: DCCoxWorker | None, pid: str | None, table_key: str
@@ -848,25 +886,8 @@ def create_ui() -> gr.Blocks:
             feature_headers: list[str],
         ) -> tuple[Any, ...]:
             def _empty(msg: str) -> tuple[Any, ...]:
-                return (
-                    msg,
-                    None,
-                    None,
-                    None,
-                    None,
-                    current_result_pid,
-                    feature_headers,
-                    None,
-                    "",
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    "",
-                    None,
-                    None,
-                    None,
+                return _workspace_empty_outputs(
+                    msg, current_result_pid, feature_headers
                 )
 
             if worker is None or not pid:
@@ -1053,7 +1074,8 @@ def create_ui() -> gr.Blocks:
                 events = worker.get_events(pid)
                 lines = [f"[{e['time'][:19]}] {e['message']}" for e in events]
                 return "\n".join(lines)
-            except Exception:
+            except Exception as exc:
+                logger.exception("Failed to poll events for %s: %s", pid, exc)
                 return "Polling events..."
 
         def handle_fetch_history(
@@ -1063,29 +1085,7 @@ def create_ui() -> gr.Blocks:
             feature_headers: list[str],
         ) -> tuple[Any, ...]:
             def _error(msg: str) -> tuple[Any, ...]:
-                return (
-                    msg,
-                    None,
-                    msg,
-                    None,
-                    None,
-                    None,
-                    None,
-                    current_result_pid,
-                    feature_headers,
-                    None,
-                    "",
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    "",
-                    None,
-                    None,
-                    None,
-                    None,
-                )
+                return _history_empty_outputs(msg, current_result_pid, feature_headers)
 
             if worker is None:
                 return _error("❌ Connect to master first")

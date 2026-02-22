@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 
@@ -116,6 +117,7 @@ class DCCoxWorker:
         data_path: str,
         *,
         poll_interval: float = 2.0,
+        poll_timeout: float | None = 600.0,
     ) -> SurvivalFunction:
         """Run the full worker-side pipeline.
 
@@ -133,6 +135,8 @@ class DCCoxWorker:
             Path to local clinical CSV file.
         poll_interval : float
             Seconds between polling attempts.
+        poll_timeout : float | None
+            Maximum seconds to wait for Xanc/results (per stage). ``None`` disables the timeout.
 
         Returns
         -------
@@ -148,7 +152,7 @@ class DCCoxWorker:
         config = project["config"]
 
         # 1. Wait for Xanc
-        xanc = self._poll_xanc(project_id, poll_interval)
+        xanc = self._poll_xanc(project_id, poll_interval, poll_timeout)
 
         # 2. Local computation
         X, y, keep_feature_cols, _meta = self._uc.local_load_metadata(
@@ -186,7 +190,7 @@ class DCCoxWorker:
         logger.info("Proxy data submitted")
 
         # 4. Wait for global results
-        results = self._poll_results(project_id, poll_interval)
+        results = self._poll_results(project_id, poll_interval, poll_timeout)
 
         # 5. Recover survival
         coef = np.array(results["coef"])
@@ -214,17 +218,26 @@ class DCCoxWorker:
 
     # ── Polling helpers ────────────────────────────────────────────────
 
-    def _poll_xanc(self, project_id: str, interval: float) -> np.ndarray:
+    def _poll_xanc(
+        self, project_id: str, interval: float, timeout: float | None
+    ) -> np.ndarray:
         """Poll until Xanc is available."""
+        start = time.monotonic()
         while True:
             resp = self._http.get(f"/api/projects/{project_id}/xanc")
             if resp.status_code == 200:
                 return np.array(resp.json()["xanc"])
             logger.debug("Waiting for Xanc...")
             time.sleep(interval)
+            if timeout is not None and time.monotonic() - start >= timeout:
+                msg = f"Timed out waiting for Xanc for project {project_id}"
+                raise TimeoutError(msg)
 
-    def _poll_results(self, project_id: str, interval: float) -> dict:
+    def _poll_results(
+        self, project_id: str, interval: float, timeout: float | None
+    ) -> dict:
         """Poll until per-worker results are available."""
+        start = time.monotonic()
         while True:
             resp = self._http.get(
                 f"/api/projects/{project_id}/results/{self._worker_id}"
@@ -233,6 +246,9 @@ class DCCoxWorker:
                 return resp.json()
             logger.debug("Waiting for global results...")
             time.sleep(interval)
+            if timeout is not None and time.monotonic() - start >= timeout:
+                msg = f"Timed out waiting for results for project {project_id}"
+                raise TimeoutError(msg)
 
     def get_worker_results(self, project_id: str) -> dict[str, str] | pd.DataFrame:
         """Return only the coefficients summary for compatibility."""
@@ -253,6 +269,11 @@ class DCCoxWorker:
     def close(self) -> None:
         """Close the HTTP session."""
         self._http.close()
+
+    def __del__(self) -> None:
+        """Close the HTTP session on deletion."""
+        with contextlib.suppress(Exception):
+            self.close()
 
 
 def _format_summary(summary: pd.DataFrame) -> pd.DataFrame:
