@@ -31,12 +31,27 @@ class DCCoxWorker:
         self._http = httpx.Client(base_url=self.master_url, timeout=120)
         self._uc = Horizontal()
         self._results: dict[str, SurvivalFunction] = {}
+        self._feature_names: dict[str, list[str]] = {}
         self._worker_id: str | None = None
 
     @property
     def worker_id(self) -> str | None:
         """Return the worker ID assigned after joining a project."""
         return self._worker_id
+
+    def get_survival_function(self, project_id: str) -> SurvivalFunction | None:
+        """Return the cached survival function for a project."""
+        return self._results.get(project_id)
+
+    def get_feature_names(self, project_id: str) -> list[str] | None:
+        """Return the ordered feature names used for predictions."""
+        names = self._feature_names.get(project_id)
+        if names is None:
+            surv = self._results.get(project_id)
+            if surv is not None:
+                names = [str(idx) for idx in surv.summary.index]
+                self._feature_names[project_id] = names
+        return names
 
     # ── Project Management ─────────────────────────────────────────────
 
@@ -191,6 +206,9 @@ class DCCoxWorker:
         )
         logger.info("Survival function recovered")
         self._results[project_id] = surv_func
+        self._feature_names[project_id] = (
+            list(keep_feature_cols) if keep_feature_cols else []
+        )
         logger.info("Results stored for project %s", project_id)
         return surv_func
 
@@ -217,14 +235,20 @@ class DCCoxWorker:
             time.sleep(interval)
 
     def get_worker_results(self, project_id: str) -> dict[str, str] | pd.DataFrame:
-        """Fetch global results for a specific worker from the master."""
+        """Return only the coefficients summary for compatibility."""
+        tables = self.get_result_tables(project_id)
+        if isinstance(tables, dict) and "error" in tables:
+            return tables
+        return tables["summary"]
+
+    def get_result_tables(
+        self, project_id: str
+    ) -> dict[str, pd.DataFrame] | dict[str, str]:
+        """Return formatted summary and baseline tables for a project."""
         surv = self._results.get(project_id)
         if surv is None:
             return {"error": f"No results found for project {project_id}"}
-        summary_ = surv.summary
-        if isinstance(summary_, pd.DataFrame) and not summary_.empty:
-            return _format_summary(summary_)
-        return summary_
+        return build_result_tables(surv)
 
     def close(self) -> None:
         """Close the HTTP session."""
@@ -236,6 +260,34 @@ def _format_summary(summary: pd.DataFrame) -> pd.DataFrame:
     summary.rename(columns={summary.columns[0]: "feature"}, inplace=True)
     summary["feature"] = summary["feature"].apply(_format_feature)
     return summary
+
+
+def _format_baseline_table(table: pd.DataFrame, value_label: str) -> pd.DataFrame:
+    formatted = table.reset_index()
+    time_col = formatted.columns[0]
+    formatted.rename(columns={time_col: "timeline"}, inplace=True)
+    value_cols = [col for col in formatted.columns if col != "timeline"]
+    if value_cols:
+        formatted.rename(columns={value_cols[0]: value_label}, inplace=True)
+    return formatted
+
+
+def build_result_tables(
+    surv: SurvivalFunction,
+) -> dict[str, pd.DataFrame]:
+    """Build formatted summary and baseline tables."""
+    return {
+        "summary": _format_summary(surv.summary),
+        "baseline_cumhazards": _format_baseline_table(
+            surv.baseline_cumhazards, "baseline cumhazards"
+        ),
+        "baseline_survival": _format_baseline_table(
+            surv.baseline_survival, "baseline survival"
+        ),
+        "baseline_hazard": _format_baseline_table(
+            surv.baseline_hazard, "baseline hazard"
+        ),
+    }
 
 
 def _format_feature(value: pd.Index | tuple[str] | list[str]) -> str:

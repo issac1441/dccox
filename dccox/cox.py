@@ -537,6 +537,8 @@ class SurvivalFunction:
             # centering="mean": use baseline hazard as-is (at mean)
             self.__baseline_hazard = baseline_hazard
 
+        self.__baseline_hazard = self._ensure_numeric_index(self.__baseline_hazard)
+
     @property
     def baseline_cumhazards(self) -> pd.DataFrame:
         r"""
@@ -580,6 +582,18 @@ class SurvivalFunction:
             h_0\\left(t\right)
         """
         return self.__baseline_hazard
+
+    @staticmethod
+    def _ensure_numeric_index(df: pd.DataFrame) -> pd.DataFrame:
+        if np.issubdtype(df.index.dtype, np.number):
+            return df
+        try:
+            numeric_index = pd.to_numeric(df.index)
+        except Exception:
+            numeric_index = pd.RangeIndex(start=0, stop=len(df), step=1)
+        df_copy = df.copy()
+        df_copy.index = numeric_index
+        return df_copy
 
     @property
     def coef(self) -> pd.DataFrame:

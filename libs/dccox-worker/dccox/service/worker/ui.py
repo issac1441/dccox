@@ -7,13 +7,98 @@ from typing import Any
 
 from fastapi import FastAPI
 import gradio as gr
+import numpy as np
 import pandas as pd
 
 from dccox.service.master.schemas import ProjectSchema
 from dccox.service.worker.config import settings
-from dccox.service.worker.worker import DCCoxWorker, _format_summary
+from dccox.service.worker.worker import DCCoxWorker, build_result_tables
 
 logger = logging.getLogger(__name__)
+
+
+PREDICTION_METHOD_ORDER = [
+    "hazard_at",
+    "cumhazard_at",
+    "survival_at",
+    "predict_log_partial_hazard",
+    "predict_partial_hazard",
+    "predict_hazard_at",
+    "predict_cumhazard_at",
+    "predict_survival_at",
+    "predict_hazard",
+    "predict_cumhazard",
+    "predict_survival",
+    "predict_expectation",
+]
+
+PREDICTION_METHOD_CONFIG = {
+    "hazard_at": {
+        "label": "hazard_at (baseline hazard at t)",
+        "requires_time": True,
+        "requires_features": False,
+    },
+    "cumhazard_at": {
+        "label": "cumhazard_at (baseline cumulative hazard at t)",
+        "requires_time": True,
+        "requires_features": False,
+    },
+    "survival_at": {
+        "label": "survival_at (baseline survival at t)",
+        "requires_time": True,
+        "requires_features": False,
+    },
+    "predict_log_partial_hazard": {
+        "label": "predict_log_partial_hazard (log hazard, features only)",
+        "requires_time": False,
+        "requires_features": True,
+    },
+    "predict_partial_hazard": {
+        "label": "predict_partial_hazard (hazard ratio, features only)",
+        "requires_time": False,
+        "requires_features": True,
+    },
+    "predict_hazard_at": {
+        "label": "predict_hazard_at (hazard at t)",
+        "requires_time": True,
+        "requires_features": True,
+    },
+    "predict_cumhazard_at": {
+        "label": "predict_cumhazard_at (cumulative hazard at t)",
+        "requires_time": True,
+        "requires_features": True,
+    },
+    "predict_survival_at": {
+        "label": "predict_survival_at (survival probability at t)",
+        "requires_time": True,
+        "requires_features": True,
+    },
+    "predict_hazard": {
+        "label": "predict_hazard (hazard over all times)",
+        "requires_time": False,
+        "requires_features": True,
+    },
+    "predict_cumhazard": {
+        "label": "predict_cumhazard (cumulative hazard over all times)",
+        "requires_time": False,
+        "requires_features": True,
+    },
+    "predict_survival": {
+        "label": "predict_survival (survival curve)",
+        "requires_time": False,
+        "requires_features": True,
+    },
+    "predict_expectation": {
+        "label": "predict_expectation (expected survival time)",
+        "requires_time": False,
+        "requires_features": True,
+    },
+}
+
+PREDICTION_OPTIONS = [
+    (PREDICTION_METHOD_CONFIG[name]["label"], name) for name in PREDICTION_METHOD_ORDER
+]
+PREDICTION_DEFAULT_METHOD = "predict_survival_at"
 
 
 def create_ui() -> gr.Blocks:
@@ -52,6 +137,8 @@ def create_ui() -> gr.Blocks:
         # ── Global State ───────────────────────────────────────────────
         worker_state = gr.State(value=None)  # DCCoxWorker instance
         active_project_id = gr.State(value=None)
+        results_project_id = gr.State(value=None)
+        feature_schema_state = gr.State(value=[])
 
         # ── Header ─────────────────────────────────────────────────────
         gr.Markdown('<p class="main-title">DC-Cox Worker</p>')
@@ -223,8 +310,53 @@ def create_ui() -> gr.Blocks:
 
                 # Summary results will appear here after run
                 summary_table = gr.Dataframe(
-                    label="My Results: Coefficients Summary", interactive=False
+                    label="My Results: Coefficients Summary",
+                    interactive=False,
+                    type="pandas",
                 )
+
+                with gr.Accordion("Baseline Details", open=False):
+                    baseline_cumhazards_table = gr.Dataframe(
+                        label="Baseline Cumulative Hazards",
+                        interactive=False,
+                        type="pandas",
+                    )
+                    baseline_survival_table = gr.Dataframe(
+                        label="Baseline Survival",
+                        interactive=False,
+                        type="pandas",
+                    )
+                    baseline_hazard_table = gr.Dataframe(
+                        label="Baseline Hazard",
+                        interactive=False,
+                        type="pandas",
+                    )
+
+                with gr.Accordion("Prediction Sandbox", open=False):
+                    prediction_method = gr.Dropdown(
+                        label="Prediction Method",
+                        choices=PREDICTION_OPTIONS,
+                        value=PREDICTION_DEFAULT_METHOD,
+                    )
+                    prediction_time = gr.Number(
+                        label="Time t",
+                        value=0.0,
+                        info="Required for *_at methods; ignored otherwise.",
+                    )
+                    prediction_input = gr.Dataframe(
+                        label="Feature Inputs",
+                        datatype="number",
+                        type="pandas",
+                        row_count=1,
+                        col_count=(0, "dynamic"),
+                    )
+                    run_prediction_btn = gr.Button(
+                        "Run Prediction", variant="secondary"
+                    )
+                    prediction_status = gr.Markdown("")
+                    prediction_output = gr.Dataframe(
+                        label="Prediction Output", interactive=False, type="pandas"
+                    )
 
             # ── Tab 4: History ─────────────────────────────────────────
             with gr.TabItem("History", id="history"):
@@ -248,10 +380,93 @@ def create_ui() -> gr.Blocks:
 
                 history_status = gr.Markdown("")
                 history_results = gr.Dataframe(
-                    label="History: Coefficients Summary", interactive=False
+                    label="History: Coefficients Summary",
+                    interactive=False,
+                    type="pandas",
                 )
 
+                with gr.Accordion("History Baseline Details", open=False):
+                    history_baseline_cumhazards_table = gr.Dataframe(
+                        label="Baseline Cumulative Hazards",
+                        interactive=False,
+                        type="pandas",
+                    )
+                    history_baseline_survival_table = gr.Dataframe(
+                        label="Baseline Survival",
+                        interactive=False,
+                        type="pandas",
+                    )
+                    history_baseline_hazard_table = gr.Dataframe(
+                        label="Baseline Hazard",
+                        interactive=False,
+                        type="pandas",
+                    )
+
+                with gr.Accordion("History Prediction Sandbox", open=False):
+                    history_prediction_method = gr.Dropdown(
+                        label="Prediction Method",
+                        choices=PREDICTION_OPTIONS,
+                        value=PREDICTION_DEFAULT_METHOD,
+                    )
+                    history_prediction_time = gr.Number(
+                        label="Time t",
+                        value=0.0,
+                        info="Required for *_at methods; ignored otherwise.",
+                    )
+                    history_prediction_input = gr.Dataframe(
+                        label="Feature Inputs",
+                        datatype="number",
+                        type="pandas",
+                        row_count=1,
+                        col_count=(0, "dynamic"),
+                    )
+                    history_run_prediction_btn = gr.Button(
+                        "Run Prediction", variant="secondary"
+                    )
+                    history_prediction_status = gr.Markdown("")
+                    history_prediction_output = gr.Dataframe(
+                        label="Prediction Output", interactive=False, type="pandas"
+                    )
+
         # ── Event Handlers ─────────────────────────────────────────────
+
+        def _default_prediction_df(headers: list[str]) -> pd.DataFrame | None:
+            if not headers:
+                return None
+            return pd.DataFrame([dict.fromkeys(headers, 0.0)])
+
+        def _prepare_feature_df(
+            value: pd.DataFrame | None, headers: list[str]
+        ) -> pd.DataFrame:
+            if not headers:
+                msg = "Feature schema unavailable. Run analysis first."
+                raise ValueError(msg)
+            if value is None or value.empty:
+                msg = "Enter at least one row of feature values."
+                raise ValueError(msg)
+            missing = [h for h in headers if h not in value.columns]
+            if missing:
+                raise ValueError(f"Missing columns: {missing}")
+            ordered = value.loc[:, headers]
+            if ordered.isnull().any().any():
+                raise ValueError("Fill in all feature values before predicting.")
+            return ordered.astype(float)
+
+        def _format_prediction_output(
+            result: pd.DataFrame | pd.Series | np.ndarray | float, method: str
+        ) -> pd.DataFrame:
+            if isinstance(result, pd.DataFrame):
+                return result
+            if isinstance(result, pd.Series):
+                return result.to_frame(name=method)
+            if np.isscalar(result):
+                return pd.DataFrame({method: [float(result)]})
+            arr = np.asarray(result)
+            if arr.ndim == 0:
+                return pd.DataFrame({method: [float(arr)]})
+            if arr.ndim == 1:
+                return pd.DataFrame({method: arr})
+            return pd.DataFrame(arr)
 
         def handle_connect(url: str) -> tuple[Any, str]:
             try:
@@ -428,24 +643,159 @@ def create_ui() -> gr.Blocks:
         )
 
         def handle_run(
-            worker: DCCoxWorker | None, pid: str | None, dpath: str
-        ) -> tuple[str, Any]:
+            worker: DCCoxWorker | None,
+            pid: str | None,
+            dpath: str,
+            current_result_pid: str | None,
+            feature_headers: list[str],
+        ) -> tuple[Any, ...]:
+            def _empty(msg: str) -> tuple[Any, ...]:
+                return (
+                    msg,
+                    None,
+                    None,
+                    None,
+                    None,
+                    current_result_pid,
+                    feature_headers,
+                    None,
+                    "",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    "",
+                    None,
+                )
+
             if worker is None or not pid:
-                return "❌ Join a project first.", None
+                return _empty("❌ Join a project first.")
             if not dpath.strip():
-                return "❌ Enter data path.", None
+                return _empty("❌ Enter data path.")
 
             try:
-                surv = worker.run_local_pipeline(pid, dpath.strip(), poll_interval=2.0)
-                summary = _format_summary(surv.summary)
-                return "✅ Local compute & global aggregation completed!", summary
+                pid_clean = pid.strip()
+                surv = worker.run_local_pipeline(
+                    pid_clean, dpath.strip(), poll_interval=2.0
+                )
+                tables = build_result_tables(surv)
+                feature_names = worker.get_feature_names(pid_clean) or []
+                prediction_df = _default_prediction_df(feature_names)
+                status_msg = "✅ Local compute & global aggregation completed!"
+                return (
+                    status_msg,
+                    tables["summary"],
+                    tables["baseline_cumhazards"],
+                    tables["baseline_survival"],
+                    tables["baseline_hazard"],
+                    pid_clean,
+                    feature_names,
+                    prediction_df,
+                    "",
+                    None,
+                    tables["baseline_cumhazards"],
+                    tables["baseline_survival"],
+                    tables["baseline_hazard"],
+                    prediction_df,
+                    "",
+                    None,
+                )
             except Exception as e:
-                return f"❌ Analysis failed: {e}", None
+                return _empty(f"❌ Analysis failed: {e}")
 
         run_btn.click(
             fn=handle_run,
-            inputs=[worker_state, active_project_id, data_path],
-            outputs=[workspace_status, summary_table],
+            inputs=[
+                worker_state,
+                active_project_id,
+                data_path,
+                results_project_id,
+                feature_schema_state,
+            ],
+            outputs=[
+                workspace_status,
+                summary_table,
+                baseline_cumhazards_table,
+                baseline_survival_table,
+                baseline_hazard_table,
+                results_project_id,
+                feature_schema_state,
+                prediction_input,
+                prediction_status,
+                prediction_output,
+                history_baseline_cumhazards_table,
+                history_baseline_survival_table,
+                history_baseline_hazard_table,
+                history_prediction_input,
+                history_prediction_status,
+                history_prediction_output,
+            ],
+        )
+
+        def handle_prediction(
+            worker: DCCoxWorker | None,
+            result_pid: str | None,
+            method: str,
+            t_value: float | None,
+            feature_headers: list[str],
+            feature_values: pd.DataFrame | None,
+        ) -> tuple[str, Any]:
+            if worker is None:
+                return "❌ Connect to master first.", None
+            if result_pid is None:
+                return "❌ Run analysis or load results first.", None
+            surv = worker.get_survival_function(result_pid)
+            if surv is None:
+                return f"❌ No cached results for project {result_pid}", None
+            cfg = PREDICTION_METHOD_CONFIG.get(method)
+            if cfg is None:
+                return f"❌ Unknown method '{method}'", None
+
+            args: list[Any] = []
+            if cfg["requires_time"]:
+                if t_value is None:
+                    return "❌ Provide a time value for this method.", None
+                args.append(float(t_value))
+            if cfg["requires_features"]:
+                names = feature_headers or worker.get_feature_names(result_pid) or []
+                try:
+                    X = _prepare_feature_df(feature_values, names)
+                except ValueError as err:
+                    return f"❌ {err}", None
+                args.append(X)
+
+            try:
+                prediction = getattr(surv, method)(*args)
+                formatted = _format_prediction_output(prediction, method)
+                return f"✅ {method} computed.", formatted
+            except Exception as err:
+                return f"❌ Prediction failed: {err}", None
+
+        run_prediction_btn.click(
+            fn=handle_prediction,
+            inputs=[
+                worker_state,
+                results_project_id,
+                prediction_method,
+                prediction_time,
+                feature_schema_state,
+                prediction_input,
+            ],
+            outputs=[prediction_status, prediction_output],
+        )
+
+        history_run_prediction_btn.click(
+            fn=handle_prediction,
+            inputs=[
+                worker_state,
+                results_project_id,
+                history_prediction_method,
+                history_prediction_time,
+                feature_schema_state,
+                history_prediction_input,
+            ],
+            outputs=[history_prediction_status, history_prediction_output],
         )
 
         def handle_poll_events(worker: DCCoxWorker | None, pid: str | None) -> str:
@@ -459,27 +809,100 @@ def create_ui() -> gr.Blocks:
                 return "Polling events..."
 
         def handle_fetch_history(
-            worker: DCCoxWorker | None, pid: str
-        ) -> tuple[str, Any]:
+            worker: DCCoxWorker | None,
+            pid: str,
+            current_result_pid: str | None,
+            feature_headers: list[str],
+        ) -> tuple[Any, ...]:
+            def _error(msg: str) -> tuple[Any, ...]:
+                return (
+                    msg,
+                    None,
+                    msg,
+                    None,
+                    None,
+                    None,
+                    None,
+                    current_result_pid,
+                    feature_headers,
+                    None,
+                    "",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    "",
+                    None,
+                )
+
             if worker is None:
-                return "❌ Connect to master first", None
+                return _error("❌ Connect to master first")
             if worker.worker_id is None:
-                return "❌ Join a project first to fetch your results", None
+                return _error("❌ Join a project first to fetch your results")
             if not pid.strip():
-                return "❌ Project ID is required", None
+                return _error("❌ Project ID is required")
+
             try:
-                results = worker.get_worker_results(pid.strip())
-                if isinstance(results, dict) and "error" in results:
-                    return f"❌ {results['error']}", None
-                summary = results if isinstance(results, pd.DataFrame) else None
-                return "✅ Loaded stored results.", summary
+                pid_clean = pid.strip()
+                surv = worker.get_survival_function(pid_clean)
+                if surv is None:
+                    return _error(f"❌ No cached results for `{pid_clean}`")
+                tables = build_result_tables(surv)
+                feature_names = worker.get_feature_names(pid_clean) or []
+                prediction_df = _default_prediction_df(feature_names)
+                status_msg = f"✅ Loaded stored results for `{pid_clean}`."
+                return (
+                    status_msg,
+                    tables["summary"],
+                    status_msg,
+                    tables["summary"],
+                    tables["baseline_cumhazards"],
+                    tables["baseline_survival"],
+                    tables["baseline_hazard"],
+                    pid_clean,
+                    feature_names,
+                    prediction_df,
+                    "",
+                    None,
+                    tables["baseline_cumhazards"],
+                    tables["baseline_survival"],
+                    tables["baseline_hazard"],
+                    prediction_df,
+                    "",
+                    None,
+                )
             except Exception as e:
-                return f"❌ Fetch failed: {e}", None
+                return _error(f"❌ Fetch failed: {e}")
 
         fetch_history_btn.click(
             fn=handle_fetch_history,
-            inputs=[worker_state, history_pid],
-            outputs=[history_status, history_results],
+            inputs=[
+                worker_state,
+                history_pid,
+                results_project_id,
+                feature_schema_state,
+            ],
+            outputs=[
+                history_status,
+                history_results,
+                workspace_status,
+                summary_table,
+                baseline_cumhazards_table,
+                baseline_survival_table,
+                baseline_hazard_table,
+                results_project_id,
+                feature_schema_state,
+                prediction_input,
+                prediction_status,
+                prediction_output,
+                history_baseline_cumhazards_table,
+                history_baseline_survival_table,
+                history_baseline_hazard_table,
+                history_prediction_input,
+                history_prediction_status,
+                history_prediction_output,
+            ],
         )
 
         def on_select_history(evt: gr.SelectData) -> str:
