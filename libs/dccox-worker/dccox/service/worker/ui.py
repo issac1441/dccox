@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import io
 import logging
 import tempfile
 from typing import Any
 
 from fastapi import FastAPI
 import gradio as gr
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -316,6 +318,8 @@ def create_ui() -> gr.Blocks:
                     type="pandas",
                 )
                 summary_download = gr.DownloadButton("Download Summary CSV")
+                coef_plot = gr.Plot(label="Coefficients Plot")
+                coef_plot_download = gr.DownloadButton("Download Coefficients Plot PNG")
 
                 with gr.Accordion("Baseline Details", open=False):
                     baseline_cumhazards_table = gr.Dataframe(
@@ -397,6 +401,10 @@ def create_ui() -> gr.Blocks:
                 )
                 history_summary_download = gr.DownloadButton(
                     "Download History Summary CSV"
+                )
+                history_coef_plot = gr.Plot(label="History Coefficients Plot")
+                history_coef_plot_download = gr.DownloadButton(
+                    "Download History Coefficients Plot PNG"
                 )
 
                 with gr.Accordion("History Baseline Details", open=False):
@@ -491,6 +499,83 @@ def create_ui() -> gr.Blocks:
                 return pd.DataFrame({method: arr})
             return pd.DataFrame(arr)
 
+        def _create_temp_file(
+            data: str | bytes, *, prefix: str, suffix: str, binary: bool = False
+        ) -> str:
+            safe_prefix = (prefix or "export").replace(" ", "_")
+            mode = "wb" if binary else "w"
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=suffix,
+                prefix=f"{safe_prefix}_",
+                mode=mode,
+            ) as tmp:
+                if binary:
+                    if isinstance(data, str):
+                        tmp.write(data.encode("utf-8"))
+                    else:
+                        tmp.write(data)
+                else:
+                    if isinstance(data, bytes):
+                        tmp.write(data.decode("utf-8"))
+                    else:
+                        tmp.write(data)
+                return tmp.name
+
+        def _create_temp_csv(content: str, prefix: str) -> str:
+            return _create_temp_file(content, prefix=prefix, suffix=".csv")
+
+        def _build_coef_plot(summary: pd.DataFrame) -> plt.Figure | None:
+            if summary is None or summary.empty:
+                return None
+            if "coef" not in summary.columns:
+                return None
+            df = summary.copy()
+            features = (
+                df["feature"].astype(str)
+                if "feature" in df.columns
+                else df.index.astype(str)
+            )
+            df = df.assign(_feature=features)
+            df = df.sort_values("coef")
+            lower_col = next(
+                (c for c in df.columns if c.startswith("coef lower")), None
+            )
+            upper_col = next(
+                (c for c in df.columns if c.startswith("coef upper")), None
+            )
+            if lower_col is None or upper_col is None:
+                return None
+            fig, ax = plt.subplots(
+                figsize=(8, max(4.0, min(10.0, 1.5 + 0.35 * len(df))))
+            )
+            ax.scatter(
+                df["coef"],
+                df["_feature"],
+                color="steelblue",
+                label="Mean",
+                zorder=5,
+            )
+            lower_err = df["coef"] - df[lower_col]
+            upper_err = df[upper_col] - df["coef"]
+            ax.errorbar(
+                df["coef"],
+                df["_feature"],
+                xerr=[lower_err, upper_err],
+                fmt="none",
+                ecolor="black",
+                elinewidth=1,
+                capsize=2,
+                label=lower_col.split("coef lower")[-1].strip() or "CI",
+            )
+            ax.set_xlabel("log(HR) (CI)")
+            ax.set_ylabel("Features")
+            ax.set_title("Cox Proportional Hazard Regression Coefficients")
+            ax.grid(axis="x", linestyle="--", alpha=0.7)
+            ax.legend()
+            fig.tight_layout()
+            return fig
+
         def _create_temp_csv(content: str, prefix: str) -> str:
             safe_prefix = (prefix or "export").replace(" ", "_")
             with tempfile.NamedTemporaryFile(
@@ -520,6 +605,34 @@ def create_ui() -> gr.Blocks:
             if not isinstance(table, pd.DataFrame):
                 raise gr.Error("Table unavailable. Run analysis first.")
             return _create_temp_csv(table.to_csv(index=False), table_key)
+
+        def _download_plot_file(worker: DCCoxWorker | None, pid: str | None) -> bytes:
+            if worker is None:
+                raise gr.Error("Connect to master first.")
+            if not pid:
+                raise gr.Error("Run analysis or load results first.")
+            pid_clean = pid.strip()
+            if not pid_clean:
+                raise gr.Error("Run analysis or load results first.")
+            tables = worker.get_result_tables(pid_clean)
+            if isinstance(tables, dict) and "error" in tables:
+                raise gr.Error(tables["error"])
+            summary = tables.get("summary")
+            if not isinstance(summary, pd.DataFrame) or summary.empty:
+                raise gr.Error("Summary unavailable. Run analysis first.")
+            fig = _build_coef_plot(summary)
+            if fig is None:
+                raise gr.Error("Unable to generate coefficient plot.")
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+            plt.close(fig)
+            return buf.getvalue()
+
+        def _download_plot_path(
+            worker: DCCoxWorker | None, pid: str | None, label: str
+        ) -> str:
+            data = _download_plot_file(worker, pid)
+            return _create_temp_file(data, prefix=label, suffix=".png", binary=True)
 
         def _compute_prediction_output(
             worker: DCCoxWorker | None,
@@ -752,6 +865,8 @@ def create_ui() -> gr.Blocks:
                     None,
                     "",
                     None,
+                    None,
+                    None,
                 )
 
             if worker is None or not pid:
@@ -767,6 +882,8 @@ def create_ui() -> gr.Blocks:
                 tables = build_result_tables(surv)
                 feature_names = worker.get_feature_names(pid_clean) or []
                 prediction_df = _default_prediction_df(feature_names)
+                workspace_fig = _build_coef_plot(tables["summary"])
+                history_fig = _build_coef_plot(tables["summary"])
                 status_msg = "✅ Local compute & global aggregation completed!"
                 return (
                     status_msg,
@@ -785,6 +902,8 @@ def create_ui() -> gr.Blocks:
                     prediction_df,
                     "",
                     None,
+                    workspace_fig,
+                    history_fig,
                 )
             except Exception as e:
                 return _empty(f"❌ Analysis failed: {e}")
@@ -815,6 +934,8 @@ def create_ui() -> gr.Blocks:
                 history_prediction_input,
                 history_prediction_status,
                 history_prediction_output,
+                coef_plot,
+                history_coef_plot,
             ],
         )
 
@@ -910,54 +1031,19 @@ def create_ui() -> gr.Blocks:
             inputs=[worker_state, results_project_id],
             outputs=[history_baseline_hazard_download],
         )
-
-        summary_download.click(
-            fn=lambda worker, pid: _download_table_csv(worker, pid, "summary"),
-            inputs=[worker_state, results_project_id],
-            outputs=[summary_download],
-        )
-        baseline_cumhazards_download.click(
-            fn=lambda worker, pid: _download_table_csv(
-                worker, pid, "baseline_cumhazards"
+        coef_plot_download.click(
+            fn=lambda worker, pid: _download_plot_path(
+                worker, pid, "coefficients_plot"
             ),
             inputs=[worker_state, results_project_id],
-            outputs=[baseline_cumhazards_download],
+            outputs=[coef_plot_download],
         )
-        baseline_survival_download.click(
-            fn=lambda worker, pid: _download_table_csv(
-                worker, pid, "baseline_survival"
+        history_coef_plot_download.click(
+            fn=lambda worker, pid: _download_plot_path(
+                worker, pid, "history_coefficients_plot"
             ),
             inputs=[worker_state, results_project_id],
-            outputs=[baseline_survival_download],
-        )
-        baseline_hazard_download.click(
-            fn=lambda worker, pid: _download_table_csv(worker, pid, "baseline_hazard"),
-            inputs=[worker_state, results_project_id],
-            outputs=[baseline_hazard_download],
-        )
-        history_summary_download.click(
-            fn=lambda worker, pid: _download_table_csv(worker, pid, "summary"),
-            inputs=[worker_state, results_project_id],
-            outputs=[history_summary_download],
-        )
-        history_baseline_cumhazards_download.click(
-            fn=lambda worker, pid: _download_table_csv(
-                worker, pid, "baseline_cumhazards"
-            ),
-            inputs=[worker_state, results_project_id],
-            outputs=[history_baseline_cumhazards_download],
-        )
-        history_baseline_survival_download.click(
-            fn=lambda worker, pid: _download_table_csv(
-                worker, pid, "baseline_survival"
-            ),
-            inputs=[worker_state, results_project_id],
-            outputs=[history_baseline_survival_download],
-        )
-        history_baseline_hazard_download.click(
-            fn=lambda worker, pid: _download_table_csv(worker, pid, "baseline_hazard"),
-            inputs=[worker_state, results_project_id],
-            outputs=[history_baseline_hazard_download],
+            outputs=[history_coef_plot_download],
         )
 
         def handle_poll_events(worker: DCCoxWorker | None, pid: str | None) -> str:
@@ -996,6 +1082,9 @@ def create_ui() -> gr.Blocks:
                     None,
                     "",
                     None,
+                    None,
+                    None,
+                    None,
                 )
 
             if worker is None:
@@ -1014,6 +1103,8 @@ def create_ui() -> gr.Blocks:
                 feature_names = worker.get_feature_names(pid_clean) or []
                 prediction_df = _default_prediction_df(feature_names)
                 status_msg = f"✅ Loaded stored results for `{pid_clean}`."
+                workspace_fig = _build_coef_plot(tables["summary"])
+                history_fig = _build_coef_plot(tables["summary"])
                 return (
                     status_msg,
                     tables["summary"],
@@ -1033,6 +1124,8 @@ def create_ui() -> gr.Blocks:
                     prediction_df,
                     "",
                     None,
+                    workspace_fig,
+                    history_fig,
                 )
             except Exception as e:
                 return _error(f"❌ Fetch failed: {e}")
@@ -1064,6 +1157,8 @@ def create_ui() -> gr.Blocks:
                 history_prediction_input,
                 history_prediction_status,
                 history_prediction_output,
+                coef_plot,
+                history_coef_plot,
             ],
         )
 
