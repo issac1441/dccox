@@ -75,6 +75,14 @@ Open `http://localhost:8001` to access the worker UI.
 > [!NOTE]
 > For full service documentation (API endpoints, environment variables, Docker usage), see the [libs/ README](libs/).
 
+### Trial Run with Sample Data
+
+The repository includes sample datasets in the `data/` directory for testing. When configuring the worker UI with these files (e.g., `data/GSE62564-1.csv`), use the following column settings:
+
+- **Feature Columns**: `MYCN,MDM2,ALK,PHOX2B`
+- **Meta Columns**: `sample-id`
+
+
 
 ## Docker
 
