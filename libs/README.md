@@ -82,10 +82,10 @@ All environment variables use the `DCCOX_` prefix and can also be set via a `.en
 │  schemas.py      │                     │  ui/             │
 └──────────────────┘                     └──────────────────┘
         │                                        │
-        └────────────┐          ┌────────────────┘
-                     ▼          ▼
-              ┌──────────────────────┐
-              │    dccox (core)      │
-              │  cox.py · usecase.py │
-              └──────────────────────┘
+        └────────────────┐      ┌────────────────┘
+                         ▼      ▼
+                 ┌──────────────────────┐
+                 │    dccox (core)      │
+                 │  cox.py · usecase.py │
+                 └──────────────────────┘
 ```
