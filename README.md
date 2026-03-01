@@ -82,6 +82,19 @@ The repository includes sample datasets in the `data/` directory for testing. Wh
 - **Feature Columns**: `MYCN,MDM2,ALK,PHOX2B`
 - **Meta Columns**: `sample-id`
 
+### UI Workflow
+
+Once services are running, follow these steps in the worker UI:
+
+1. **Connect to Master** — In the **Dashboard** tab, enter the Master URL and click **Connect to Master**. Repeat for each worker.
+2. **Create Project** — One worker (the *creator*) goes to the **Create Project** tab, fills in project settings (name, hyperparameters, feature/meta columns), and clicks **Create Project** to obtain a **Project ID**.
+3. **Refresh Projects** — Other workers click **Refresh Projects** in the Dashboard to see the newly created project.
+4. **Join Project** — In the **Active Workspace** tab, each worker enters the **Project ID**, **Worker Name**, and **Local CSV Path**, then clicks **1. Join Project**.
+5. **Wait for All Workers** — Ensure all participating workers have joined before proceeding.
+6. **Lock Project** — The project creator clicks **2. Lock Project (Creator)** to prevent additional workers from joining.
+7. **Start Analysis** — The project creator clicks **3. Start Analysis (Creator)** to generate shared projection matrices.
+8. **Run Local Compute** — Each worker clicks **4. Run Local Compute** to execute the local pipeline.
+9. **View Results** — Once all workers complete their local computation, results (coefficients, baseline hazard/survival) will be displayed in the Active Workspace.
 
 
 ## Docker
