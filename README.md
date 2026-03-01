@@ -10,18 +10,119 @@ An **UNOFFICIAL** implementation of [DC-COX](https://www.sciencedirect.com/scien
 > [!IMPORTANT]
 > This project is **not affiliated with or endorsed by** the original authors or the publisher. The DC-COX method is credited to the original paper; this repository provides an independent software implementation.
 
+## Architecture
+
+DC-COX is organized as a [uv workspace](https://docs.astral.sh/uv/concepts/workspaces/) with three packages:
+
+| Package | Description | Default Port |
+|---|---|---|
+| `dccox` (root) | Core library — Cox PH regression, projectors, survival functions | — |
+| [`dccox-master`](libs/dccox-master/) | Central orchestration server (FastAPI) | 8000 |
+| [`dccox-worker`](libs/dccox-worker/) | Worker node with Gradio UI | 8001 |
+
+```
+┌──────────────────┐        HTTP         ┌──────────────────┐
+│   dccox-master   │◄───────────────────►│   dccox-worker   │
+│   (FastAPI)      │   /api/projects/*   │   (Gradio UI)    │
+│                  │                     │                  │
+│  repository.py   │                     │  client.py       │
+│  service.py      │                     │  pipeline.py     │
+│  routes.py       │                     │  worker.py       │
+│  schemas.py      │                     │  ui/             │
+└──────────────────┘                     └──────────────────┘
+        │                                        │
+        └────────────────┐      ┌────────────────┘
+                         ▼      ▼
+                 ┌──────────────────────┐
+                 │    dccox (core)      │
+                 │  cox.py · usecase.py │
+                 └──────────────────────┘
+```
+
+The **master** manages the project lifecycle, worker registration, proxy data collection, and global model fitting. The **worker** connects to a master, loads local clinical data, computes proxy data, and recovers the survival function through an interactive browser UI.
+
+Both service packages share the core `dccox` library via [namespace packaging](https://docs.python.org/3/library/pkgutil.html#pkgutil.extend_path).
+
+
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/issac1441/dccox
+cd dccox
+
+# Install all workspace packages
+uv sync --all-packages
+```
+
+
+## Quick Start
+
+From the **project root**, start both services:
+
+```bash
+# Terminal 1 — start master
+cd libs/dccox-master
+uv run uvicorn dccox.service.master.app:app --host 0.0.0.0 --port 8000
+
+# Terminal 2 — start worker
+cd libs/dccox-worker
+uv run python -m dccox.service.worker.ui
+```
+
+Open `http://localhost:8001` to access the worker UI.
+
+> [!NOTE]
+> For full service documentation (API endpoints, environment variables, Docker usage), see the [libs/ README](libs/).
+
+
+## Docker
+
+Build images from the **project root** (the Dockerfiles use root as build context):
+
+```bash
+# Build
+docker build -f libs/dccox-master/Dockerfile -t dccox-master .
+docker build -f libs/dccox-worker/Dockerfile -t dccox-worker .
+
+# Create a shared network (for worker connectivity to master)
+docker network create dccox-net
+
+# Run master
+docker run --rm --name master \
+  --network dccox-net \
+  -e DCCOX_MASTER_PORT=8000 \
+  dccox-master
+
+# Run worker (mount local data directory)
+docker run --rm --name worker1 \
+  --network dccox-net \
+  -p 8001:8001 \
+  -e DCCOX_WORKER_PORT=8001 \
+  -e DCCOX_MASTER_URL=http://master:8000 \
+  -e DCCOX_WORKER_NAME=worker1 \
+  -v ./data:/mnt \
+  dccox-worker
+```
+
+Open `http://localhost:8001` to access the worker UI.
+
+> [!NOTE]
+> The master URL `http://master:8000` is resolved via Docker DNS from the `--name master` flag.
+
+
 ## Differences from the DC-COX paper
 
-This repository implements the DC-COX workflow and follows the paper’s core algorithms, but includes several **engineering/stability** choices and **output conventions** that can differ from a strict paper-only implementation.
+This repository implements the DC-COX workflow and follows the paper's core algorithms, but includes several **engineering/stability** choices and **output conventions** that can differ from a strict paper-only implementation.
 
 ### 1) Bootstrap sampling default: subsampling without replacement (`bs_replace=False`)
-- The paper’s Algorithm 2 describes bootstrap-based dimensionality reduction.
+- The paper's Algorithm 2 describes bootstrap-based dimensionality reduction.
 - This implementation defaults to **subsampling without replacement** (`bs_replace=False`) to improve numerical stability when fitting Cox models with `lifelines` (fewer duplicated rows → lower risk of collinearity / singularity convergence failures).
 - You can switch to classic bootstrap by setting `bs_replace=True`.
 
 ### 2) PCA-based $F_{DR}$: feature-space basis via SVD
 - The paper allows combining bootstrap-based DR with other DR methods (e.g., PCA/LPP/NMF) to form:
-  
+
   <div align="center">
 
   $$F = [F_{BS}, F_{DR}]E.$$
@@ -47,7 +148,7 @@ This repository implements the DC-COX workflow and follows the paper’s core al
 - The paper uses the standard Cox form:
 
   <div align="center">
-  
+
   $$h(t\mid x) = h_0(t)\exp(x^\top \beta)$$
 
   </div>
@@ -56,30 +157,30 @@ This repository implements the DC-COX workflow and follows the paper’s core al
 
 - `lifelines` reports baseline hazard under a mean-centered convention. To support both, this implementation provides:
 
-  **(a) `centering=None` (paper convention)**  
+  **(a) `centering=None` (paper convention)**
   Uses $x^\top\beta$ in the linear predictor, and rescales the provided baseline hazard by a constant factor:
-  
+
   <div align="center">
 
   $$h_0^{paper}(t) = h_0^{lifelines}(t)\exp(-\bar x^\top\beta)$$
-  
+
   </div>
 
   Partial hazard uses $\exp(x^\top\beta)$.
 
-  **(b) `centering="mean"` (lifelines convention)**  
+  **(b) `centering="mean"` (lifelines convention)**
   Uses $(x-\bar x)^\top\beta$ in the linear predictor and keeps baseline hazard unchanged:
-  
+
   <div align="center">
-  
+
   $$h(t\mid x) = h_0^{lifelines}(t)\exp((x-\bar x)^\top\beta)$$
-  
+
   </div>
 
 - Both conventions yield **identical final hazard/survival predictions**, but the *reported* baseline hazard differs by a constant factor.
 
 ### 6) Extra artifact: returning `feature_mean`
-- The paper’s core artifacts are coefficients (and variance) plus baseline hazard.
+- The paper's core artifacts are coefficients (and variance) plus baseline hazard.
 - This implementation additionally computes/returns the **global feature mean** $\bar x$ (`feature_mean`) for prediction/reporting convenience (used by the `centering` option). This is not a core artifact explicitly described in the paper.
 
 ### 7) Engineering-oriented I/O and data structures
@@ -87,30 +188,7 @@ This repository implements the DC-COX workflow and follows the paper’s core al
 - This repo provides practical wrappers and data structures (e.g., `BlockMatrix`, `usecase.Horizontal`) for orchestration, missing-value handling, and commercial/workflow integration.
 
 
-## 📦 Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/issac1441/dccox
-cd dccox
-
-# Install dependencies using uv
-uv sync --all-groups
-```
-
-
-## 🚀 Quick Start
-
-```bash
-# Activate the virtual environment
-source .venv/bin/activate
-
-# Run the application
-python -m dccox.main
-```
-
-
-## 🛠️ Development
+## Development
 
 ### Prerequisites
 
@@ -126,20 +204,15 @@ python -m dccox.main
 
 2. **Install all dependencies** (including dev, test, docs):
    ```bash
-   uv sync --all-groups
+   uv sync --all-packages --all-groups
    ```
 
-3. **Activate the virtual environment**:
+3. **Install pre-commit hooks**:
    ```bash
-   source .venv/bin/activate
+   uv run pre-commit install
    ```
 
-4. **Install pre-commit hooks**:
-   ```bash
-   pre-commit install
-   ```
-
-### 🧪 Testing
+### Testing
 
 ```bash
 # Run tests
@@ -149,7 +222,7 @@ uv run pytest
 uv run pytest --cov=dccox
 ```
 
-### 🧹 Linting & Formatting
+### Linting & Formatting
 
 This project uses [Ruff](https://github.com/astral-sh/ruff) for linting and formatting.
 
@@ -164,13 +237,13 @@ uv run ruff check . --fix
 uv run ruff format .
 ```
 
-### 📝 Type Checking (Optional)
+### Type Checking (Optional)
 
 ```bash
 uv run mypy dccox
 ```
 
-### 📚 Documentation
+### Documentation
 
 Build documentation using Sphinx:
 
@@ -182,40 +255,8 @@ make html
 The generated documentation will be in `docs/_build/html/`.
 
 
-### 🐳 Docker
 
-```bash
-# Build
-docker build -t dccox .
-
-# Run
-docker run dccox
-```
-
-
-## 📁 Project Structure
-
-```
-dccox/
-├── dccox/          # Main package
-│   ├── __init__.py
-│   └── main.py
-├── tests/                   # Test files
-├── docs/                    # Sphinx documentation
-├── .github/                 # GitHub Actions & templates
-│   ├── workflows/
-│   └── ISSUE_TEMPLATE/
-├── pyproject.toml           # Project configuration
-├── Dockerfile
-├── LICENSE
-├── README.md
-├── CONTRIBUTING.md
-├── CODE_OF_CONDUCT.md
-├── SECURITY.md
-└── CHANGELOG.md
-```
-
-## 📚 References & Citation
+## References & Citation
 
 ### Original Paper (Method)
 If you use the DC-COX method in your research, please cite the original paper:
@@ -247,12 +288,7 @@ If you use this specific software implementation, please cite it using the metad
 ```
 
 
-## 🤝 Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-
-## 📄 License
+## License
 
 This project is licensed under the ARL-1.1. See the [LICENSE](LICENSE) file for details.
 
