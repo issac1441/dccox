@@ -6,35 +6,34 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
-
-# Install dependencies
-RUN uv sync --frozen --no-install-project
-
-# Copy the rest of the application
+# Copy project
 COPY . .
 
-# Install the project itself
-RUN uv sync --frozen
+# Install master's dependencies
+RUN uv sync --frozen --package dccox-master
 
-# Final stage
+# -------------------------------------------------------
+
+# Main stage
 FROM python:3.11-slim-bookworm
+
+# Copy uv and virtual environment
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+ENV DCCOX_MASTER_PORT=8000
 
 WORKDIR /app
 
-# Copy the virtual environment from the builder stage
-COPY --from=builder /app/.venv /app/.venv
-
 # Copy application code
-COPY . /app
+COPY libs/dccox-master/ /app/libs/dccox-master/
+COPY dccox/ /app/dccox/
 
 # Add virtual environment to PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Expose the master port (default 8000)
-# Can be overridden by DCCOX_MASTER_PORT
-EXPOSE 8000
+EXPOSE $DCCOX_MASTER_PORT
 
 # Run the application
-CMD ["python", "-m", "dccox.service.master.app"]
+CMD ["uv", "run", "uvicorn", "dccox.service.master.app:app", "--host", "0.0.0.0"]
